@@ -1,0 +1,53 @@
+export const PermissionCode = {
+  AdministrationRead: "administration.read",
+  AdministrationManage: "administration.manage",
+  UsersRead: "users.read",
+  UsersManage: "users.manage",
+  RolesRead: "roles.read",
+  RolesManage: "roles.manage",
+  EmployeesRead: "employees.read",
+  EmployeesManage: "employees.manage",
+  OrgRead: "org.read",
+  OrgManage: "org.manage",
+  OrgStructureManage: "org.structure.manage",
+  ShiftsRead: "shifts.read",
+  ShiftsManage: "shifts.manage",
+  AttendanceRead: "attendance.read",
+  AttendanceManage: "attendance.manage",
+  AttendanceBlocksCreate: "attendance_blocks.create",
+  AttendanceBlocksManage: "attendance_blocks.manage",
+  DevicesRead: "devices.read",
+  ReportsRead: "reports.read",
+  ReportsExport: "reports.export",
+  PayrollControl: "payroll.control",
+  SyncRun: "sync.run",
+  AuditRead: "audit.read"
+} as const;
+
+export type PermissionCode = (typeof PermissionCode)[keyof typeof PermissionCode];
+
+export const ALL_PERMISSIONS = [
+  { code: PermissionCode.AdministrationRead, module: "administration", action: "read", description: "Voir le module administration" },
+  { code: PermissionCode.AdministrationManage, module: "administration", action: "manage", description: "Gérer la configuration administration" },
+  { code: PermissionCode.UsersRead, module: "users", action: "read", description: "Voir les utilisateurs" },
+  { code: PermissionCode.UsersManage, module: "users", action: "manage", description: "Créer, modifier et désactiver les utilisateurs" },
+  { code: PermissionCode.RolesRead, module: "roles", action: "read", description: "Voir les rôles et permissions" },
+  { code: PermissionCode.RolesManage, module: "roles", action: "manage", description: "Modifier les permissions des rôles" },
+  { code: PermissionCode.EmployeesRead, module: "employees", action: "read", description: "Voir les employés" },
+  { code: PermissionCode.EmployeesManage, module: "employees", action: "manage", description: "Modifier les données employés locales" },
+  { code: PermissionCode.OrgRead, module: "org", action: "read", description: "Voir l'organigramme" },
+  { code: PermissionCode.OrgManage, module: "org", action: "manage", description: "Gérer groupes et rattachements" },
+  { code: PermissionCode.OrgStructureManage, module: "org", action: "structure.manage", description: "Créer, modifier et supprimer unités et sous-unités" },
+  { code: PermissionCode.ShiftsRead, module: "shifts", action: "read", description: "Voir les shifts" },
+  { code: PermissionCode.ShiftsManage, module: "shifts", action: "manage", description: "Créer et modifier les shifts" },
+  { code: PermissionCode.AttendanceRead, module: "attendance", action: "read", description: "Voir les pointages" },
+  { code: PermissionCode.AttendanceManage, module: "attendance", action: "manage", description: "Corriger et valider les pointages" },
+  { code: PermissionCode.AttendanceBlocksCreate, module: "attendance_blocks", action: "create", description: "Créer un blocage/anomalie de pointage" },
+  { code: PermissionCode.AttendanceBlocksManage, module: "attendance_blocks", action: "manage", description: "Gérer les blocages/anomalies de pointage" },
+  { code: PermissionCode.DevicesRead, module: "devices", action: "read", description: "Voir les terminaux" },
+  { code: PermissionCode.ReportsRead, module: "reports", action: "read", description: "Voir les rapports" },
+  { code: PermissionCode.ReportsExport, module: "reports", action: "export", description: "Exporter les rapports" },
+  { code: PermissionCode.PayrollControl, module: "payroll", action: "control", description: "Importer et comparer les rubriques de paie SAP" },
+  { code: PermissionCode.SyncRun, module: "sync", action: "run", description: "Lancer une synchronisation ZKTeco" },
+  { code: PermissionCode.AuditRead, module: "audit", action: "read", description: "Lire le journal d'audit" }
+] as const;

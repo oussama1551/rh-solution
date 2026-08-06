@@ -1,0 +1,1 @@
+ALTER TYPE "shift_type" ADD VALUE IF NOT EXISTS 'REPOS';
