@@ -6,3 +6,5 @@ dist/
 *.log
 apps/api/prisma/*.xml
 license*.xml
+*.tsbuildinfo
+.zcode/
