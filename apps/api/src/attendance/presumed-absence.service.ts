@@ -31,6 +31,7 @@ export class PresumedAbsenceService {
     const dateKey = targetDate || localDateKey(reference);
     const todayKey = localDateKey(reference);
     const targetDay = startOfLocalDay(new Date(`${dateKey}T00:00:00`));
+    await this.autoRejectInactivePending(targetDay);
     const yesterday = addDays(targetDay, -1);
     const nowMinutes = reference.getHours() * 60 + reference.getMinutes();
     const plannedResult = await this.importPlannedAbsences(dateKey, reference);
@@ -150,6 +151,7 @@ export class PresumedAbsenceService {
   async list(filters: { status?: string; date?: string; search?: string }, actor?: RequestUser) {
     const status = filters.status && filters.status !== "ALL" ? filters.status as PresumedAbsenceStatus : undefined;
     const date = filters.date ? startOfLocalDay(new Date(`${filters.date}T00:00:00`)) : undefined;
+    await this.autoRejectInactivePending(date);
     const search = filters.search?.trim();
     const employeeScope = employeeScopeWhere(actor);
 
@@ -273,6 +275,63 @@ export class PresumedAbsenceService {
         OR: identityPunchClauses(employee)
       }
     });
+  }
+
+  private async autoRejectInactivePending(date?: Date) {
+    const rows = await this.prisma.presumedAbsence.findMany({
+      where: {
+        status: PresumedAbsenceStatus.PENDING_REVIEW,
+        ...(date ? { date } : {}),
+        employee: { status: { not: "ACTIVE" } }
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            fullName: true,
+            status: true,
+            employeeCode: true,
+            biotimeCode: true,
+            localMatricule: true
+          }
+        }
+      }
+    });
+
+    for (const row of rows) {
+      const updated = await this.prisma.presumedAbsence.update({
+        where: { id: row.id },
+        data: {
+          status: PresumedAbsenceStatus.REJECTED,
+          reviewedAt: new Date(),
+          reviewNote: "Rejet automatique: employé non actif/démissionné."
+        },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              employeeCode: true,
+              biotimeCode: true,
+              localMatricule: true,
+              fullName: true,
+              department: true,
+              status: true
+            }
+          },
+          reviewedBy: { select: { id: true, username: true, fullName: true } }
+        }
+      });
+      await this.audit.record({
+        action: "presumed_absence.auto_reject_inactive",
+        entityType: "presumed_absence",
+        entityId: row.id,
+        before: row as unknown as Prisma.InputJsonValue,
+        after: updated as unknown as Prisma.InputJsonValue,
+        metadata: { employeeStatus: row.employee.status }
+      });
+    }
+
+    return rows.length;
   }
 }
 

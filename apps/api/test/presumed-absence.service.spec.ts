@@ -16,6 +16,7 @@ function makeService() {
     },
     presumedAbsence: {
       upsert: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
       update: jest.fn()
     }
@@ -242,5 +243,30 @@ describe("PresumedAbsenceService", () => {
     }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "presumed_absence.confirm" }));
     expect(result.status).toBe(PresumedAbsenceStatus.CONFIRMED);
+  });
+
+  it("rejette automatiquement les absences en attente d'un employé démissionné avant affichage", async () => {
+    const { service, prisma, audit } = makeService();
+    const stale = {
+      id: "presumed-resigned",
+      status: PresumedAbsenceStatus.PENDING_REVIEW,
+      employee: { id: "emp-resigned", fullName: "ACHARI AHMED", status: "RESIGNED" }
+    };
+    prisma.presumedAbsence.findMany
+      .mockResolvedValueOnce([stale])
+      .mockResolvedValueOnce([]);
+    prisma.presumedAbsence.update.mockResolvedValue({ ...stale, status: PresumedAbsenceStatus.REJECTED });
+
+    const rows = await service.list({ status: "PENDING_REVIEW", date: "2026-08-10" }, admin);
+
+    expect(rows).toEqual([]);
+    expect(prisma.presumedAbsence.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "presumed-resigned" },
+      data: expect.objectContaining({
+        status: PresumedAbsenceStatus.REJECTED,
+        reviewNote: "Rejet automatique: employé non actif/démissionné."
+      })
+    }));
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: "presumed_absence.auto_reject_inactive" }));
   });
 });
