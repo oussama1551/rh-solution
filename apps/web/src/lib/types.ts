@@ -430,6 +430,9 @@ export type AttendanceDailyRow = {
   isIncomplete: boolean;
   sourceDevice: string | null;
   summaryStatus?: AttendanceSummaryStatus | null;
+  declarationFirstPunchTime?: string | null;
+  declarationLastPunchTime?: string | null;
+  declarationPunchCount?: number | null;
 };
 
 export type ShiftDefinition = {

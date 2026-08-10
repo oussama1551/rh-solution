@@ -242,18 +242,11 @@ export class AttendancePunchesService {
     ]);
     const summaryByDate = new Map(summaryRecords.map(record => [localDateKey(record.workDate), record]));
     const liveStatusByDate = new Map(liveDeclarations.map(row => [row.workDate, row]));
+    const showDeclarationPunchNote = canReviewDeclarationPunches(actor);
     const daysByDate = new Map<string, any>(
       rawDays.map(day => [
         day.workDate,
-        {
-          ...day,
-          summaryStatus: liveStatusByDate.get(day.workDate)?.status || summaryByDate.get(day.workDate)?.status || null,
-          shiftLabel: liveStatusByDate.get(day.workDate)?.label || day.shiftLabel,
-          overtimeHours: Number(summaryByDate.get(day.workDate)?.overtimeHours || 0),
-          overtimeHoursRate50: Number(summaryByDate.get(day.workDate)?.overtimeHoursRate50 || 0),
-          overtimeHoursRate75: Number(summaryByDate.get(day.workDate)?.overtimeHoursRate75 || 0),
-          overtimeHoursRate100: Number(summaryByDate.get(day.workDate)?.overtimeHoursRate100 || 0)
-        }
+        calendarDayWithDeclarations(day, liveStatusByDate.get(day.workDate), summaryByDate.get(day.workDate), showDeclarationPunchNote)
       ])
     );
     const employee = daysByDate.values().next().value?.employee || employeeFallback;
@@ -721,6 +714,52 @@ function syntheticCalendarDay(record: {
     sourceDevice: null,
     summaryStatus: record.status
   };
+}
+
+function calendarDayWithDeclarations(day: any, liveDeclaration: { status: AttendanceSummaryStatus; label: string } | undefined, summaryRecord: any, showDeclarationPunchNote: boolean) {
+  const summaryStatus = liveDeclaration?.status || summaryRecord?.status || null;
+  const base = {
+    ...day,
+    summaryStatus,
+    shiftLabel: liveDeclaration?.label || day.shiftLabel,
+    overtimeHours: Number(summaryRecord?.overtimeHours || 0),
+    overtimeHoursRate50: Number(summaryRecord?.overtimeHoursRate50 || 0),
+    overtimeHoursRate75: Number(summaryRecord?.overtimeHoursRate75 || 0),
+    overtimeHoursRate100: Number(summaryRecord?.overtimeHoursRate100 || 0),
+    declarationFirstPunchTime: null,
+    declarationLastPunchTime: null,
+    declarationPunchCount: null
+  };
+  if (liveDeclaration?.status === AttendanceSummaryStatus.SICK) {
+    return {
+      ...base,
+      declarationFirstPunchTime: showDeclarationPunchNote ? day.firstPunchTime : null,
+      declarationLastPunchTime: showDeclarationPunchNote ? day.lastPunchTime : null,
+      declarationPunchCount: showDeclarationPunchNote ? day.punchCount : null,
+      firstPunchTime: null,
+      lastPunchTime: null,
+      firstPunchId: null,
+      lastPunchId: null,
+      punchCount: 0,
+      workedHours: 0,
+      overtimeHours: 0,
+      overtimeHoursRate50: 0,
+      overtimeHoursRate75: 0,
+      overtimeHoursRate100: 0,
+      timing: "NORMAL",
+      shiftType: "FLEXIBLE",
+      shiftLabel: liveDeclaration.label,
+      assignmentSource: "summary",
+      serviceStatus: "complete",
+      isIncomplete: false
+    };
+  }
+  return base;
+}
+
+function canReviewDeclarationPunches(actor?: RequestUser) {
+  const roles = new Set(actor?.roles || []);
+  return roles.has("ADMIN") || roles.has("DRH") || roles.has("GRH");
 }
 
 function syntheticCalendarDayFromStatus(employeeId: string, workDate: string, status: AttendanceSummaryStatus, label: string, employee: any) {

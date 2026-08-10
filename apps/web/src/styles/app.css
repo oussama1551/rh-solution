@@ -1718,6 +1718,11 @@ select {
   font-weight: 800;
 }
 
+.declaration-punch-note {
+  color: #b45309 !important;
+  font-weight: 800;
+}
+
 .no-print {
   display: flex;
 }

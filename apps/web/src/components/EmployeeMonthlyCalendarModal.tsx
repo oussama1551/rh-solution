@@ -66,6 +66,13 @@ function AttendanceCalendar({ data }: { data: AttendanceMonthlyCalendar }) {
                   <span>{timingLabels[day.timing]}</span>
                   <small>{day.assignmentSource === "assigned" ? "Assigné" : day.assignmentSource === "summary" ? "Synthèse paie" : "Déduit"}</small>
                   <small>{formatTime(day.firstPunchTime)} - {formatTime(day.lastPunchTime)}</small>
+                  {day.declarationFirstPunchTime && (
+                    <small className="declaration-punch-note">
+                      Pointage détecté: {formatTime(day.declarationFirstPunchTime)}
+                      {day.declarationLastPunchTime && day.declarationLastPunchTime !== day.declarationFirstPunchTime ? ` - ${formatTime(day.declarationLastPunchTime)}` : ""}
+                      {day.declarationPunchCount ? ` (${day.declarationPunchCount})` : ""}
+                    </small>
+                  )}
                   <small>{day.isIncomplete ? "Incomplet" : hoursLabel(day.workedHours)}</small>
                   {(day.overtimeHours || 0) > 0 && <small className="overtime-calendar-line">Sup: {hoursLabel(day.overtimeHours || 0)}</small>}
                 </>

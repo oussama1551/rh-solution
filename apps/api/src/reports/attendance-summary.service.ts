@@ -128,11 +128,12 @@ export class AttendanceSummaryService {
           ? AttendanceSummaryStatus.ABSENCE_REVERSED
           : baseStatus;
         const leaveDetails = status === AttendanceSummaryStatus.LEAVE ? leaveDetailsByEmployeeDate.get(key) || null : null;
+        const workedHours = status === AttendanceSummaryStatus.SICK ? 0 : row.workedHours || 0;
         await tx.attendanceSummaryRecord.upsert({
           where: { employeeId_workDate_periodStart_periodEnd: { employeeId: row.employee.id, workDate: parseDateKey(row.workDate), periodStart: from, periodEnd: to } },
           update: {
             status,
-            workedHours: new Prisma.Decimal(row.workedHours || 0),
+            workedHours: new Prisma.Decimal(workedHours),
             overtimeHours: new Prisma.Decimal(overtimeHours.total),
             overtimeHoursRate50: new Prisma.Decimal(overtimeHours.rate50),
             overtimeHoursRate75: new Prisma.Decimal(overtimeHours.rate75),
@@ -149,7 +150,7 @@ export class AttendanceSummaryService {
             employeeId: row.employee.id,
             workDate: parseDateKey(row.workDate),
             status,
-            workedHours: new Prisma.Decimal(row.workedHours || 0),
+            workedHours: new Prisma.Decimal(workedHours),
             overtimeHours: new Prisma.Decimal(overtimeHours.total),
             overtimeHoursRate50: new Prisma.Decimal(overtimeHours.rate50),
             overtimeHoursRate75: new Prisma.Decimal(overtimeHours.rate75),
