@@ -223,7 +223,7 @@ export class AttendancePunchesService {
 
   async employeeMonthlyCalendar(employeeId: string, month: string, actor?: RequestUser) {
     const range = resolveRange({ month });
-    const [rawDays, summaryRecords, employeeFallback, liveDeclarations] = await Promise.all([
+    const [rawDays, summaryRecords, employeeFallback, liveDeclarations, fallbackPunches] = await Promise.all([
       this.buildDailyRows({ employeeId }, range, actor),
       this.prisma.attendanceSummaryRecord.findMany({
         where: {
@@ -238,13 +238,26 @@ export class AttendancePunchesService {
         where: { id: employeeId, ...employeeScopeWhere(actor) },
         select: employeeCalendarSelect()
       }),
-      this.loadCalendarDeclarations(employeeId, range)
+      this.loadCalendarDeclarations(employeeId, range),
+      this.loadPunchesForDaily({ employeeId }, range.from, range.to, actor)
     ]);
+    const fallbackDays = this.summarizeDaily(fallbackPunches, range.fromKey, range.toKey)
+      .map(day => ({
+        ...day,
+        shiftType: "FLEXIBLE",
+        shiftLabel: "Pointage brut",
+        assignmentSource: "summary" as const,
+        assignedVia: null,
+        sourceGroupId: null,
+        sourceGroupName: null,
+        serviceStatus: day.isIncomplete ? "incomplete" : "complete",
+        summaryStatus: null
+      }));
     const summaryByDate = new Map(summaryRecords.map(record => [localDateKey(record.workDate), record]));
     const liveStatusByDate = new Map(liveDeclarations.map(row => [row.workDate, row]));
     const showDeclarationPunchNote = canReviewDeclarationPunches(actor);
     const daysByDate = new Map<string, any>(
-      rawDays.map(day => [
+      [...rawDays, ...fallbackDays.filter(day => !rawDays.some(rawDay => rawDay.workDate === day.workDate))].map(day => [
         day.workDate,
         calendarDayWithDeclarations(day, liveStatusByDate.get(day.workDate), summaryByDate.get(day.workDate), showDeclarationPunchNote)
       ])

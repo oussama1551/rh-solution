@@ -64,7 +64,7 @@ describe("PresumedAbsenceService", () => {
           }
         }
       },
-      select: { id: true }
+      select: { id: true, employeeCode: true, biotimeCode: true, localMatricule: true }
     });
     expect(prisma.presumedAbsence.upsert).not.toHaveBeenCalled();
   });
@@ -85,6 +85,25 @@ describe("PresumedAbsenceService", () => {
       heuristicChecked: 1,
       heuristicCreated: 0
     });
+    expect(prisma.presumedAbsence.upsert).not.toHaveBeenCalled();
+  });
+
+  it("ne détecte pas une fiche doublon si le même matricule affiché a des pointages", async () => {
+    const { service, prisma } = makeService();
+    prisma.employee.findMany.mockResolvedValue([{ id: "shadow-employee", employeeCode: "133", biotimeCode: "", localMatricule: "RECYCLAGE_DEV-702" }]);
+    prisma.attendancePunch.count.mockResolvedValue(2);
+
+    const result = await service.detectForToday(new Date(2026, 7, 10, 9, 0));
+
+    expect(result.created).toBe(0);
+    expect(prisma.attendancePunch.count).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([
+          { employeeId: "shadow-employee" },
+          { employee: { localMatricule: "RECYCLAGE_DEV-702" } }
+        ])
+      })
+    }));
     expect(prisma.presumedAbsence.upsert).not.toHaveBeenCalled();
   });
 

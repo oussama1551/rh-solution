@@ -83,7 +83,7 @@ export class PresumedAbsenceService {
           }
         }
       },
-      select: { id: true }
+      select: { id: true, employeeCode: true, biotimeCode: true, localMatricule: true }
     });
 
     let created = 0;
@@ -91,12 +91,7 @@ export class PresumedAbsenceService {
     const to = new Date(reference);
 
     for (const employee of employees) {
-      const punchCount = await this.prisma.attendancePunch.count({
-        where: {
-          employeeId: employee.id,
-          punchTime: { gte: from, lte: to }
-        }
-      });
+      const punchCount = await this.countIdentityPunches(employee, from, to);
 
       if (punchCount > 0) continue;
 
@@ -174,7 +169,7 @@ export class PresumedAbsenceService {
       }
     };
 
-    return this.prisma.presumedAbsence.findMany({
+    const rows = await this.prisma.presumedAbsence.findMany({
       where,
       orderBy: [{ date: "desc" }, { detectedAt: "desc" }],
       include: {
@@ -193,6 +188,18 @@ export class PresumedAbsenceService {
         reviewedBy: { select: { id: true, username: true, fullName: true } }
       }
     });
+
+    const visible = [];
+    for (const row of rows) {
+      if (row.status === PresumedAbsenceStatus.PENDING_REVIEW && row.basis === BASIS) {
+        const from = addDays(row.date, -1);
+        const to = addDays(row.date, 1);
+        const punchCount = await this.countIdentityPunches(row.employee, from, to);
+        if (punchCount > 0) continue;
+      }
+      visible.push(row);
+    }
+    return visible;
   }
 
   async confirm(id: string, actor: RequestUser) {
@@ -254,6 +261,35 @@ export class PresumedAbsenceService {
       throw new ForbiddenException("Seuls Admin, DRH et GRH peuvent valider les absences présumées.");
     }
   }
+
+  private countIdentityPunches(
+    employee: { id: string; employeeCode?: string | null; biotimeCode?: string | null; localMatricule?: string | null },
+    from: Date,
+    to: Date
+  ) {
+    return this.prisma.attendancePunch.count({
+      where: {
+        punchTime: { gte: from, lte: to },
+        OR: identityPunchClauses(employee)
+      }
+    });
+  }
+}
+
+function identityPunchClauses(employee: { id: string; employeeCode?: string | null; biotimeCode?: string | null; localMatricule?: string | null }) {
+  const clauses: Prisma.AttendancePunchWhereInput[] = [{ employeeId: employee.id }];
+  const localMatricule = cleanIdentity(employee.localMatricule);
+  const biotimeCode = cleanIdentity(employee.biotimeCode);
+  const employeeCode = cleanIdentity(employee.employeeCode);
+  if (localMatricule) clauses.push({ employee: { localMatricule } });
+  if (biotimeCode) clauses.push({ employee: { biotimeCode } });
+  if (employeeCode) clauses.push({ employee: { employeeCode } });
+  return clauses;
+}
+
+function cleanIdentity(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed !== "-" ? trimmed : null;
 }
 
 function startOfLocalDay(date: Date) {
