@@ -1,5 +1,5 @@
 import { ExceptionalLeaveReason, LeaveType, OvertimeRateType } from "@prisma/client";
-import { IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
+import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
 
 export class CreateOvertimeDeclarationDto {
   @IsUUID()
@@ -51,21 +51,6 @@ export class CreateSickLeaveDeclarationDto {
   note?: string;
 }
 
-export class CreateWorkAccidentDeclarationDto {
-  @IsUUID()
-  employeeId!: string;
-
-  @IsDateString()
-  dateStart!: string;
-
-  @IsDateString()
-  dateEnd!: string;
-
-  @IsOptional()
-  @IsString()
-  note?: string;
-}
-
 export class CreateLeaveDeclarationDto {
   @IsUUID()
   employeeId!: string;
@@ -99,30 +84,4 @@ export class CreateAbsenceReversalRequestDto {
   @IsString()
   @IsNotEmpty()
   reason!: string;
-}
-
-export class CreateAbsenceTypeDeclarationDto {
-  @IsUUID()
-  employeeId!: string;
-
-  @IsDateString()
-  date!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  typeCode!: string;
-
-  @IsOptional()
-  @IsString()
-  note?: string;
-}
-
-export class UpdateAbsenceTypeCodeDto {
-  @IsString()
-  @IsNotEmpty()
-  label!: string;
-
-  @IsOptional()
-  @IsBoolean()
-  active?: boolean;
 }

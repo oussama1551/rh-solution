@@ -59,9 +59,79 @@ export type Employee = {
   photoProxyUrl?: string | null;
   hireDate?: string | null;
   status: "ACTIVE" | "RESIGNED";
+  biometricEnrollment?: BiometricEnrollment;
   sapMappings?: EmployeeMapping[];
   sapDirectoryRecords?: SapDirectoryEmployee[];
   group?: OrgGroup | null;
+};
+
+export type BiometricEnrollment = {
+  fingerprint: boolean;
+  face: boolean;
+  palm?: boolean;
+  visibleLightFace?: boolean;
+  visibleLightPalm?: boolean;
+};
+
+export type ResignRecordRow = {
+  id: string;
+  biotimeId: string;
+  resignDate: string | null;
+  reason: string | null;
+  resignType: string;
+  employeeZktecoId: string | null;
+  employeeName: string;
+  employeeCode: string;
+  department: string;
+  status: "ACTIVE" | "RESIGNED";
+  employee: Employee | null;
+};
+
+export type BioTimeDepartment = {
+  code: string;
+  name: string;
+  parentCode?: string | null;
+  children?: BioTimeDepartment[];
+};
+
+export type BioTimeDepartmentResponse = {
+  departments: BioTimeDepartment[];
+  tree: BioTimeDepartment[];
+};
+
+export type BioTimeEmployeeLive = {
+  local: Employee;
+  biotime: BioTimeEmployeeForm;
+};
+
+export type BioTimeEmployeeForm = {
+  id?: string | null;
+  localId?: string | null;
+  empCode?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+  department?: string | null;
+  departmentName?: string | null;
+  position?: string | null;
+  employmentType?: string | null;
+  hireDate?: string | null;
+  area?: string | null;
+  superior?: string | null;
+  workflowRole?: string | null;
+  localName?: string | null;
+  gender?: string | null;
+  birthday?: string | null;
+  contactTel?: string | null;
+  officeTel?: string | null;
+  mobile?: string | null;
+  national?: string | null;
+  city?: string | null;
+  address?: string | null;
+  postcode?: string | null;
+  email?: string | null;
+  photo?: string | null;
+  raw?: Record<string, unknown>;
 };
 
 export type OrgUnit = {
@@ -80,6 +150,7 @@ export type OrgSubUnit = {
   name: string;
   description?: string | null;
   isSouthWilaya?: boolean;
+  biotimeDepartmentCode?: string | null;
   employeeCount: number;
   unit?: OrgUnit;
   groups: OrgGroup[];
@@ -253,6 +324,56 @@ export type AttendancePunchRow = {
     reason: string | null;
     reviewNote: string | null;
   }>;
+};
+
+export type EmployeeRawPunch = {
+  id: string;
+  punchTime: string;
+  punchDate: string;
+  punchHour: string;
+  direction: "CHECK_IN" | "CHECK_OUT" | "UNKNOWN";
+  shiftDate: string | null;
+  shiftStatus: string;
+  countsAsPresence: boolean;
+  zktecoPunchId: string | null;
+  biotimeId: string | null;
+  sourceUploadedAt?: string | null;
+  sourceDevice: string | null;
+  verifyMode: string | null;
+  punchType: string | null;
+  workCode: string | null;
+  shift: {
+    id: string;
+    code: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    spansMidnight: boolean;
+  } | null;
+  rawPayload?: Record<string, unknown> | null;
+};
+
+export type PresumedAbsenceStatus = "PENDING_REVIEW" | "CONFIRMED" | "REJECTED";
+
+export type PresumedAbsence = {
+  id: string;
+  date: string;
+  detectedAt: string;
+  basis: string;
+  status: PresumedAbsenceStatus;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+  employee: {
+    id: string;
+    zktecoId: string;
+    biotimeCode: string | null;
+    localMatricule: string | null;
+    employeeCode: string;
+    fullName: string;
+    department: string | null;
+    status: "ACTIVE" | "RESIGNED";
+  };
+  reviewedBy?: UserSummary | null;
 };
 
 export type AttendanceTiming = "MORNING" | "EVENING" | "NIGHT" | "NORMAL";
@@ -502,25 +623,6 @@ export type ManualDeclarationApprovals = {
     employee: { id: string; fullName: string; localMatricule: string | null; biotimeCode: string | null; employeeCode: string };
     declaredBy: UserSummary | null;
   }>;
-  absenceTypes: Array<{
-    id: string;
-    date: string;
-    typeCode: string;
-    note: string | null;
-    status: ApprovalStatus;
-    createdAt: string;
-    employee: { id: string; fullName: string; localMatricule: string | null; biotimeCode: string | null; employeeCode: string };
-    type: AbsenceTypeCode;
-    declaredBy: UserSummary | null;
-  }>;
-};
-
-export type AbsenceTypeCode = {
-  code: string;
-  label: string;
-  active: boolean;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
 export type AttendanceMonthlyCalendar = {
@@ -673,7 +775,6 @@ export type SummaryReportRow = {
   absentDays: number;
   sickDays: number;
   leaveDays: number;
-  accidentDays: number;
   compensatedDays: number;
   absenceReversedDays: number;
   restDays: number;
@@ -690,7 +791,6 @@ export type SummaryDailyRecordRow = {
   id: string;
   workDate: string;
   status: AttendanceSummaryStatus;
-  absenceTypeCode: string | null;
   workedHours: number;
   overtimeHours: number;
   overtimeHoursRate50: number;
@@ -700,40 +800,6 @@ export type SummaryDailyRecordRow = {
   leaveType: LeaveType | null;
   exceptionalReason: ExceptionalLeaveReason | null;
   generatedAt: string;
-};
-
-export type AbsenceRecapReport = {
-  period: {
-    startDate: string;
-    endDate: string;
-  };
-  totals: {
-    absences: number;
-    pending: number;
-    confirmed: number;
-  };
-  byType: Array<{
-    code: string;
-    label: string;
-    days: number;
-  }>;
-  rows: AbsenceRecapRow[];
-};
-
-export type AbsenceRecapRow = {
-  id: string;
-  date: string;
-  classificationStatus: "PENDING" | "CONFIRMED";
-  employee: SummaryReportRow["employee"];
-  type: { code: string; label: string } | null;
-  declaration: {
-    id: string;
-    status: ApprovalStatus;
-    note: string | null;
-    declaredBy: UserSummary | null;
-    approvedBy: UserSummary | null;
-    approvedAt: string | null;
-  } | null;
 };
 
 export type OvertimeDeclaration = {
@@ -776,7 +842,6 @@ export type SickLeaveDeclaration = {
   approvedBy?: UserSummary | null;
 };
 
-export type WorkAccidentDeclaration = SickLeaveDeclaration;
 export type LeaveType = "ANNUEL" | "EXCEPTIONNEL" | "SANS_SOLDE" | "MATERNITE";
 export type ExceptionalLeaveReason = "MARIAGE_EMPLOYE" | "NAISSANCE_ENFANT" | "MARIAGE_ENFANT" | "DECES_CONJOINT" | "DECES_PARENT_PROCHE" | "CIRCONCISION_FILS" | "HAJJ";
 export type LeaveDeclaration = SickLeaveDeclaration & {
@@ -812,7 +877,7 @@ export type AbsenceReversalRequest = {
   approvedBy?: UserSummary | null;
 };
 
-export type PayrollMapTarget = "ABSENCE" | "OVERTIME_50" | "OVERTIME_75" | "OVERTIME_100" | "SICK" | "ACCIDENT" | "COMPENSATION" | "IGNORED";
+export type PayrollMapTarget = "ABSENCE" | "OVERTIME_50" | "OVERTIME_75" | "OVERTIME_100" | "SICK" | "COMPENSATION" | "IGNORED";
 
 export type PayrollRubricMapping = {
   id: string;
@@ -841,7 +906,6 @@ export type PayrollControlValues = {
   overtime75: number;
   overtime100: number;
   sick: number;
-  accident: number;
   compensation: number;
 };
 

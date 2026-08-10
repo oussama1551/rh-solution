@@ -5,7 +5,7 @@ import { DataTable } from "../components/DataTable";
 import { FilterField, FiltersBar } from "../components/FiltersBar";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
-import { AbsenceTypeCode, DailyAbsenceReport, OrgUnit } from "../lib/types";
+import { DailyAbsenceReport, OrgUnit } from "../lib/types";
 import { useApi, useSessionFilters } from "../lib/useApi";
 import { api } from "../lib/api";
 
@@ -47,17 +47,6 @@ function formatDateTime(value: string) {
   });
 }
 
-function readableApiError(message: string) {
-  try {
-    const parsed = JSON.parse(message) as { message?: string | string[] };
-    if (Array.isArray(parsed.message)) return parsed.message.join(" ");
-    if (parsed.message) return parsed.message;
-  } catch {
-    return message;
-  }
-  return message;
-}
-
 export function DailyAbsencesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,11 +54,6 @@ export function DailyAbsencesPage() {
   const [reversalRow, setReversalRow] = useState<DailyAbsenceReport["rows"][number] | null>(null);
   const [reversalReason, setReversalReason] = useState("");
   const [reversalSaving, setReversalSaving] = useState(false);
-  const [classificationRow, setClassificationRow] = useState<DailyAbsenceReport["rows"][number] | null>(null);
-  const [classificationType, setClassificationType] = useState("");
-  const [classificationNote, setClassificationNote] = useState("");
-  const [classificationSaving, setClassificationSaving] = useState(false);
-  const [classificationError, setClassificationError] = useState<string | null>(null);
   const { filters, update, reset } = useSessionFilters("daily.absences.filters", {
     date: todayKey(),
     search: "",
@@ -79,7 +63,6 @@ export function DailyAbsencesPage() {
     status: ""
   });
   const orgTree = useApi<OrgUnit[]>("/api/org/tree", []);
-  const absenceTypes = useApi<AbsenceTypeCode[]>("/api/attendance/absence-types?activeOnly=true", []);
   const report = useApi<DailyAbsenceReport>(buildPath(filters), {
     date: filters.date || todayKey(),
     generatedAt: new Date().toISOString(),
@@ -137,34 +120,6 @@ export function DailyAbsencesPage() {
       setError(declareError instanceof Error ? declareError.message : "Demande impossible.");
     } finally {
       setReversalSaving(false);
-    }
-  }
-
-  async function submitClassification() {
-    if (!classificationRow || !classificationType) return;
-    setMessage(null);
-    setError(null);
-    setClassificationError(null);
-    setClassificationSaving(true);
-    try {
-      const result = await api<{ status: string }>("/api/attendance/declarations/absence-types", {
-        method: "POST",
-        body: JSON.stringify({
-          employeeId: classificationRow.employee.id,
-          date: classificationRow.date,
-          typeCode: classificationType,
-          note: classificationNote.trim() || undefined
-        })
-      });
-      setMessage(result.status === "PENDING_APPROVAL" ? "Classification envoyée en validation." : "Classification d'absence confirmée.");
-      setClassificationRow(null);
-      setClassificationType("");
-      setClassificationNote("");
-      await report.reload();
-    } catch (declareError) {
-      setClassificationError(declareError instanceof Error ? readableApiError(declareError.message) : "Classification impossible.");
-    } finally {
-      setClassificationSaving(false);
     }
   }
 
@@ -261,7 +216,6 @@ export function DailyAbsencesPage() {
                 <Button variant="ghost" onClick={() => setVerificationRow(row)}><CalendarDays size={15} /> Vérifier</Button>
                 {row.status === "ABSENT" ? <Button variant="secondary" onClick={() => declareCompensation(row)}>Déclarer compensation</Button> : null}
                 {row.status === "ABSENT" ? <Button variant="secondary" onClick={() => { setReversalRow(row); setReversalReason(""); }}>Demander annulation</Button> : null}
-                {row.status === "ABSENT" ? <Button variant="primary" onClick={() => { setClassificationRow(row); setClassificationType(absenceTypes.data[0]?.code || ""); setClassificationNote(""); setClassificationError(null); }}>Classifier</Button> : null}
               </div>
             ) }
           ]}
@@ -302,40 +256,6 @@ export function DailyAbsencesPage() {
               <Button variant="secondary" onClick={() => setReversalRow(null)} disabled={reversalSaving}>Annuler</Button>
               <Button variant="primary" onClick={submitAbsenceReversal} disabled={reversalSaving || !reversalReason.trim()}>
                 {reversalSaving ? "Envoi..." : "Envoyer la demande"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      {classificationRow && (
-        <div className="modal-backdrop">
-          <div className="app-modal">
-            <div className="modal-header">
-              <div>
-                <span>Classifier l'absence</span>
-                <strong>{classificationRow.employee.fullName}</strong>
-                <small className="muted">{formatDate(classificationRow.date)}</small>
-              </div>
-              <button type="button" className="icon-button" onClick={() => setClassificationRow(null)} title="Fermer" disabled={classificationSaving}><X size={18} /></button>
-            </div>
-            <div className="form-grid single">
-              <label>
-                Type d'absence
-                <select value={classificationType} onChange={event => setClassificationType(event.target.value)}>
-                  {absenceTypes.data.map(type => <option key={type.code} value={type.code}>{type.code} - {type.label}</option>)}
-                </select>
-              </label>
-              <label>
-                Motif / note
-                <textarea rows={3} value={classificationNote} onChange={event => setClassificationNote(event.target.value)} placeholder="Note optionnelle..." />
-              </label>
-            </div>
-            {absenceTypes.error && <div className="alert alert-error">Impossible de charger les types d'absence.</div>}
-            {classificationError && <div className="alert alert-error">{classificationError}</div>}
-            <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setClassificationRow(null)} disabled={classificationSaving}>Annuler</Button>
-              <Button variant="primary" onClick={submitClassification} disabled={classificationSaving || !classificationType}>
-                {classificationSaving ? "Enregistrement..." : "Enregistrer"}
               </Button>
             </div>
           </div>

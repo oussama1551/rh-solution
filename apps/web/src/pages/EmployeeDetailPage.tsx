@@ -1,6 +1,10 @@
+import { Clock3, UserX } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { BiometricBadges } from "../components/BiometricBadges";
 import { Button } from "../components/Button";
+import { EmployeePunchHistoryModal } from "../components/EmployeePunchHistoryModal";
+import { EmployeeResignModal } from "../components/EmployeeResignModal";
 import { PageHeader } from "../components/PageHeader";
 import { ShiftAssignmentCalendar } from "../components/ShiftAssignmentCalendar";
 import { StatusBadge } from "../components/StatusBadge";
@@ -23,11 +27,11 @@ export function EmployeeDetailPage() {
   const { user, can } = useAuth();
   const employee = useApi<Employee | null>(id ? `/api/employees/${id}` : null, null);
   const leaveBalance = useApi<AnnualLeaveBalance | null>(id ? `/api/attendance/declarations/leaves/balance?employeeId=${encodeURIComponent(id)}&year=${new Date().getFullYear()}` : null, null);
-  const [photoAttempt, setPhotoAttempt] = useState<"direct" | "proxy" | "failed">("direct");
+  const [photoAttempt, setPhotoAttempt] = useState<"proxy" | "direct" | "failed">("proxy");
   const confirmedSap = employee.data?.sapMappings?.find(mapping => mapping.status === "confirmed");
   const sapMetadata = confirmedSap?.metadata || null;
   const sapDirectoryRecord = employee.data?.sapDirectoryRecords?.[0];
-  const employeePhotoUrl = photoAttempt === "direct" ? employee.data?.photoUrl : employee.data?.photoProxyUrl;
+  const employeePhotoUrl = photoAttempt === "proxy" ? employee.data?.photoProxyUrl : employee.data?.photoUrl;
   const employeePhone = employee.data?.sapPhone || employee.data?.displayPhone || employee.data?.phone || "-";
   const orgTree = useApi<OrgUnit[]>("/api/org/tree", []);
   const [unitId, setUnitId] = useState("");
@@ -39,12 +43,15 @@ export function EmployeeDetailPage() {
   const [overtime, setOvertime] = useState<{ date: string; hours: string; rateType: OvertimeRateType; reason: string }>({ date: dateKey(new Date()), hours: "2", rateType: "RATE_50", reason: "" });
   const [sickLeave, setSickLeave] = useState({ dateStart: dateKey(new Date()), dateEnd: dateKey(new Date()), note: "" });
   const [leave, setLeave] = useState({ dateStart: dateKey(new Date()), dateEnd: dateKey(new Date()), note: "" });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [resignOpen, setResignOpen] = useState(false);
   const selectedUnit = orgTree.data.find(unit => unit.id === unitId) || null;
   const selectedSubUnit = selectedUnit?.subUnits.find(subUnit => subUnit.id === subUnitId) || null;
+  const canManageResigns = Boolean(user?.roles.some(role => ["ADMIN", "DRH", "GRH"].includes(role)));
 
   useEffect(() => {
-    setPhotoAttempt("direct");
-  }, [employee.data?.photoUrl]);
+    setPhotoAttempt("proxy");
+  }, [employee.data?.photoProxyUrl]);
 
   useEffect(() => {
     const group = employee.data?.group;
@@ -133,8 +140,8 @@ export function EmployeeDetailPage() {
   }
 
   function handlePhotoError() {
-    if (photoAttempt === "direct" && employee.data?.photoProxyUrl) {
-      setPhotoAttempt("proxy");
+    if (photoAttempt === "proxy" && employee.data?.photoUrl) {
+      setPhotoAttempt("direct");
       return;
     }
 
@@ -143,7 +150,18 @@ export function EmployeeDetailPage() {
 
   return (
     <>
-      <PageHeader title={employee.data?.fullName || "Fiche employé"} backTo="/employees" backLabel="Retour aux employés" />
+      <PageHeader
+        title={employee.data?.fullName || "Fiche employé"}
+        backTo="/employees"
+        backLabel="Retour aux employés"
+        actions={employee.data && (
+          <div className="row-actions">
+            <button className="btn btn-secondary" type="button" onClick={() => setHistoryOpen(true)}><Clock3 size={15} /> Historique des pointages</button>
+            {canManageResigns && employee.data.status === "ACTIVE" && <button className="btn btn-danger" type="button" onClick={() => setResignOpen(true)}><UserX size={15} /> Démissionner</button>}
+            <PermissionGate permission="employees.manage"><Link className="btn btn-primary" to={`/employees/${employee.data.id}/edit`}>Modifier BioTime</Link></PermissionGate>
+          </div>
+        )}
+      />
       <section className="panel">
         {employee.error && <div className="alert">La fiche est prête pour `/api/employees/:id`.</div>}
         {employee.data ? (
@@ -171,6 +189,7 @@ export function EmployeeDetailPage() {
               <div><span>Code BioTime source</span><strong>{employee.data.biotimeCode || employee.data.employeeCode}</strong></div>
               <div><span>ID interne BioTime</span><strong>{employee.data.zktecoId}</strong></div>
               <div><span>Statut</span><StatusBadge value={employee.data.status} /></div>
+              <div><span>Biométrie</span><BiometricBadges enrollment={employee.data.biometricEnrollment} /></div>
               <div><span>Département</span><strong>{employee.data.department || "-"}</strong></div>
               <div><span>Téléphone SAP</span><strong>{employeePhone}</strong></div>
               <div><span>Matricule SAP</span><strong>{confirmedSap?.sapEmpId || "-"}</strong></div>
@@ -282,6 +301,8 @@ export function EmployeeDetailPage() {
           </>
         ) : <div className="empty-state">Sélectionnez un employé depuis la liste.</div>}
       </section>
+      <EmployeePunchHistoryModal employee={historyOpen ? employee.data : null} onClose={() => setHistoryOpen(false)} />
+      <EmployeeResignModal employee={resignOpen ? employee.data : null} onClose={() => setResignOpen(false)} onDone={employee.reload} />
     </>
   );
 }

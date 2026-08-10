@@ -37,13 +37,11 @@ model User {
   declaredCompensations AbsenceCompensation[] @relation("CompensationDeclarer")
   approvedCompensations AbsenceCompensation[] @relation("CompensationApprover")
   declaredSickLeaves SickLeaveDeclaration[] @relation("SickLeaveDeclarer")
-  declaredWorkAccidents WorkAccidentDeclaration[] @relation("WorkAccidentDeclarer")
   declaredLeaves LeaveDeclaration[] @relation("LeaveDeclarer")
   approvedLeaves LeaveDeclaration[] @relation("LeaveApprover")
   declaredAbsenceReversals AbsenceReversalRequest[] @relation("AbsenceReversalDeclarer")
   approvedAbsenceReversals AbsenceReversalRequest[] @relation("AbsenceReversalApprover")
-  declaredAbsenceTypeDeclarations AbsenceTypeDeclaration[] @relation("AbsenceTypeDeclarer")
-  approvedAbsenceTypeDeclarations AbsenceTypeDeclaration[] @relation("AbsenceTypeApprover")
+  reviewedPresumedAbsences PresumedAbsence[]
   subUnitAccess UserSubUnitAccess[]
   notifications Notification[] @relation("NotificationRecipient")
   createdChatConversations ChatConversation[] @relation("ChatConversationCreator")
@@ -323,6 +321,14 @@ enum NotificationType {
   @@map("notification_type")
 }
 
+enum PresumedAbsenceStatus {
+  PENDING_REVIEW
+  CONFIRMED
+  REJECTED
+
+  @@map("presumed_absence_status")
+}
+
 enum ChatConversationType {
   DIRECT
   GROUP
@@ -373,17 +379,37 @@ model Employee {
   overtimeDeclarations OvertimeDeclaration[]
   absenceCompensations AbsenceCompensation[]
   sickLeaveDeclarations SickLeaveDeclaration[]
-  workAccidentDeclarations WorkAccidentDeclaration[]
   leaveDeclarations LeaveDeclaration[]
   absenceReversalRequests AbsenceReversalRequest[]
-  absenceTypeDeclarations AbsenceTypeDeclaration[]
   annualLeaveBalances AnnualLeaveBalance[]
   summaryRecords AttendanceSummaryRecord[]
+  presumedAbsences PresumedAbsence[]
 
   @@index([groupId])
   @@index([status])
   @@index([fullName])
   @@map("employees")
+}
+
+model PresumedAbsence {
+  id           String                 @id @default(uuid()) @db.Uuid
+  employeeId   String                 @map("employee_id") @db.Uuid
+  date         DateTime               @db.Date
+  detectedAt   DateTime               @default(now()) @map("detected_at") @db.Timestamptz(6)
+  basis        String                 @default("no_punch_heuristic") @db.VarChar(80)
+  status       PresumedAbsenceStatus  @default(PENDING_REVIEW)
+  reviewedById String?                @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime?              @map("reviewed_at") @db.Timestamptz(6)
+  reviewNote   String?                @map("review_note")
+
+  employee     Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy   User?                  @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([status])
+  @@index([reviewedById])
+  @@map("presumed_absences")
 }
 
 model ShiftDefinition {
@@ -457,6 +483,7 @@ model SubUnit {
   name        String    @db.VarChar(160)
   description String?
   isSouthWilaya Boolean @default(false) @map("is_south_wilaya")
+  biotimeDepartmentCode String? @map("biotime_department_code") @db.VarChar(120)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -466,6 +493,7 @@ model SubUnit {
 
   @@unique([unitId, name])
   @@index([name])
+  @@index([biotimeDepartmentCode])
   @@map("sub_units")
 }
 
@@ -609,25 +637,6 @@ model SickLeaveDeclaration {
   @@map("sick_leave_declarations")
 }
 
-model WorkAccidentDeclaration {
-  id           String         @id @default(uuid()) @db.Uuid
-  employeeId   String         @map("employee_id") @db.Uuid
-  dateStart    DateTime       @map("date_start") @db.Date
-  dateEnd      DateTime       @map("date_end") @db.Date
-  note         String?
-  declaredById String?        @map("declared_by") @db.Uuid
-  status       ApprovalStatus @default(APPROVED)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  declaredBy   User?          @relation("WorkAccidentDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-
-  @@index([employeeId, dateStart, dateEnd])
-  @@index([status])
-  @@map("work_accident_declarations")
-}
-
 model LeaveDeclaration {
   id           String         @id @default(uuid()) @db.Uuid
   employeeId   String         @map("employee_id") @db.Uuid
@@ -693,45 +702,6 @@ model AbsenceReversalRequest {
   @@map("absence_reversal_requests")
 }
 
-model AbsenceTypeCode {
-  code      String   @id @db.VarChar(12)
-  label     String   @db.VarChar(180)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  declarations AbsenceTypeDeclaration[]
-  summaryRecords AttendanceSummaryRecord[]
-
-  @@index([active])
-  @@map("absence_type_codes")
-}
-
-model AbsenceTypeDeclaration {
-  id           String         @id @default(uuid()) @db.Uuid
-  employeeId   String         @map("employee_id") @db.Uuid
-  date         DateTime       @db.Date
-  typeCode     String         @map("type_code") @db.VarChar(12)
-  note         String?
-  declaredById String?        @map("declared_by") @db.Uuid
-  status       ApprovalStatus @default(PENDING_APPROVAL)
-  approvedById String?        @map("approved_by") @db.Uuid
-  approvedAt   DateTime?      @map("approved_at") @db.Timestamptz(6)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  type         AbsenceTypeCode @relation(fields: [typeCode], references: [code], onDelete: Restrict)
-  declaredBy   User?          @relation("AbsenceTypeDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-  approvedBy   User?          @relation("AbsenceTypeApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-
-  @@unique([employeeId, date])
-  @@index([date])
-  @@index([typeCode])
-  @@index([status])
-  @@map("absence_type_declarations")
-}
-
 model AttendanceSummaryRecord {
   id             String                  @id @default(uuid()) @db.Uuid
   employeeId     String                  @map("employee_id") @db.Uuid
@@ -743,7 +713,6 @@ model AttendanceSummaryRecord {
   overtimeHoursRate75  Decimal           @default(0) @map("overtime_hours_rate_75") @db.Decimal(7, 2)
   overtimeHoursRate100 Decimal           @default(0) @map("overtime_hours_rate_100") @db.Decimal(7, 2)
   isCompensation Boolean                 @default(false) @map("is_compensation")
-  absenceTypeCode String?                @map("absence_type_code") @db.VarChar(12)
   leaveType      LeaveType?              @map("leave_type")
   exceptionalReason ExceptionalLeaveReason? @map("exceptional_reason")
   shiftType      ShiftType?              @map("shift_type")
@@ -754,13 +723,10 @@ model AttendanceSummaryRecord {
   updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   employee       Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  absenceType    AbsenceTypeCode?        @relation(fields: [absenceTypeCode], references: [code], onDelete: SetNull)
-
   @@unique([employeeId, workDate, periodStart, periodEnd])
   @@index([periodStart, periodEnd])
   @@index([status])
   @@index([employeeId, periodStart, periodEnd])
-  @@index([absenceTypeCode])
   @@map("attendance_summary_records")
 }
 

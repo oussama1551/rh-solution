@@ -36,6 +36,7 @@ describe("SyncService", () => {
       listResigns: jest.fn().mockResolvedValue([]),
       listDevices: jest.fn().mockResolvedValue([]),
       listTransactions: jest.fn().mockResolvedValue([]),
+      listTransactionsUploadedAfter: jest.fn().mockResolvedValue([]),
       ...overrides
     };
     const service = new SyncService(

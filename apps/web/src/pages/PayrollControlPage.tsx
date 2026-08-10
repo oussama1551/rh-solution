@@ -120,7 +120,6 @@ export function PayrollControlPage() {
             { key: "badge", header: "État", render: row => row.hasDiff ? <span className="badge badge-red">Écart détecté</span> : <span className="badge badge-green">OK</span>, sortValue: row => row.hasDiff ? 1 : 0 },
             categoryColumn("Absence", "absence"),
             categoryColumn("Maladie", "sick"),
-            categoryColumn("Accident", "accident"),
             categoryColumn("Comp.", "compensation"),
             categoryColumn("Sup. 50%", "overtime50"),
             categoryColumn("Sup. 75%", "overtime75"),
@@ -154,7 +153,7 @@ export function PayrollControlPage() {
   );
 }
 
-const payrollTargets: PayrollMapTarget[] = ["IGNORED", "ABSENCE", "SICK", "ACCIDENT", "COMPENSATION", "OVERTIME_50", "OVERTIME_75", "OVERTIME_100"];
+const payrollTargets: PayrollMapTarget[] = ["IGNORED", "ABSENCE", "SICK", "COMPENSATION", "OVERTIME_50", "OVERTIME_75", "OVERTIME_100"];
 
 function categoryColumn(label: string, key: keyof PayrollControlRow["rh"]) {
   return {

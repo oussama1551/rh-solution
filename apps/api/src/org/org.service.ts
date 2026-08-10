@@ -176,8 +176,9 @@ export class OrgService {
         unitId: dto.unitId,
         name: dto.name.trim(),
         description: dto.description?.trim() || null,
-        isSouthWilaya: dto.isSouthWilaya ?? false
-      }
+        isSouthWilaya: dto.isSouthWilaya ?? false,
+        biotimeDepartmentCode: normalizeOptionalText(dto.biotimeDepartmentCode)
+      } as any
     });
     await this.audit.record({ userId: actor.id, action: "org.sub_units.create", entityType: "sub_unit", entityId: subUnit.id, after: subUnit as unknown as Prisma.InputJsonValue });
     return subUnit;
@@ -194,8 +195,9 @@ export class OrgService {
         unitId: dto.unitId,
         name: dto.name?.trim(),
         description: normalizeOptionalText(dto.description),
-        isSouthWilaya: dto.isSouthWilaya
-      }
+        isSouthWilaya: dto.isSouthWilaya,
+        biotimeDepartmentCode: dto.biotimeDepartmentCode === undefined ? undefined : normalizeOptionalText(dto.biotimeDepartmentCode)
+      } as any
     });
     await this.audit.record({ userId: actor.id, action: "org.sub_units.update", entityType: "sub_unit", entityId: id, before: before as unknown as Prisma.InputJsonValue, after: updated as unknown as Prisma.InputJsonValue });
     return updated;

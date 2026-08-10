@@ -1,6 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
+import FormData = require("form-data");
+import { CookieJar } from "tough-cookie";
 import { BioTimeLicenseService } from "./biotime-license.service";
 import { BioTimeListResponse, BioTimeRecord, ProgressCallback } from "./biotime.types";
 
@@ -25,8 +27,41 @@ export class BioTimeClientService {
     return this.paginatedGet("/personnel/api/employees/", this.buildSinceParams(updatedAfter, ["update_time", "updated_time", "last_update"]));
   }
 
+  async getEmployee(id: string) {
+    return this.requestWithAuth<BioTimeRecord>("get", `/personnel/api/employees/${id}/`);
+  }
+
+  async createEmployee(payload: BioTimeRecord) {
+    return this.requestWithAuth<BioTimeRecord>("post", "/personnel/api/employees/", payload);
+  }
+
+  async updateEmployee(id: string, payload: BioTimeRecord) {
+    return this.requestWithAuth<BioTimeRecord>("patch", `/personnel/api/employees/${id}/`, payload);
+  }
+
+  async listDepartments() {
+    return this.paginatedGet("/personnel/api/departments/", {});
+  }
+
+  async uploadEmployeePhoto(id: string, file: { buffer: Buffer; originalname?: string; mimetype?: string }) {
+    const form = new FormData();
+    form.append("employee_photo", file.buffer, {
+      filename: file.originalname || "employee-photo",
+      contentType: file.mimetype || "application/octet-stream"
+    });
+    return this.requestWithAuth<BioTimeRecord>("patch", `/personnel/api/employees/${id}/`, form, form.getHeaders());
+  }
+
   async listResigns(updatedAfter?: string) {
     return this.paginatedGet("/personnel/api/resigns/", this.buildSinceParams(updatedAfter, ["update_time", "updated_time", "resign_date"]));
+  }
+
+  async createResign(payload: BioTimeRecord) {
+    return this.requestWithAuth<BioTimeRecord>("post", "/personnel/api/resigns/", payload);
+  }
+
+  async reinstateResign(id: string) {
+    return this.requestWithAuth<BioTimeRecord>("post", "/personnel/api/resigns/reinstatement/", { resigns: [id] });
   }
 
   async listDevices(updatedAfter?: string) {
@@ -67,25 +102,90 @@ export class BioTimeClientService {
         responseType: "arraybuffer",
         headers: this.authHeaders()
       });
+      const contentType = String(response.headers["content-type"] || "application/octet-stream");
+
+      if (contentType.toLowerCase().includes("text/html")) {
+        return this.downloadAssetWithWebSession(pathOrUrl);
+      }
 
       return {
         buffer: Buffer.from(response.data),
-        contentType: String(response.headers["content-type"] || "application/octet-stream")
+        contentType
       };
     } catch (error) {
       if (axios.isAxiosError(error) && [401, 403].includes(error.response?.status || 0)) {
-        const response = await this.client.get<ArrayBuffer>(pathOrUrl, {
-          responseType: "arraybuffer"
-        });
-
-        return {
-          buffer: Buffer.from(response.data),
-          contentType: String(response.headers["content-type"] || "application/octet-stream")
-        };
+        return this.downloadAssetWithWebSession(pathOrUrl);
       }
 
       throw error;
     }
+  }
+
+  private async downloadAssetWithWebSession(pathOrUrl: string) {
+    const jar = new CookieJar();
+    const baseURL = this.required("BIOTIME_BASE_URL");
+    const client = axios.create({
+      baseURL,
+      timeout: Number(this.config.get("BIOTIME_TIMEOUT_MS") || 30_000),
+      withCredentials: true
+    });
+
+    client.interceptors.request.use(config => {
+      const url = new URL(String(config.url || ""), baseURL).toString();
+      const cookie = jar.getCookieStringSync(url);
+      if (cookie) config.headers.set("Cookie", cookie);
+      return config;
+    });
+
+    client.interceptors.response.use(response => {
+      const url = new URL(String(response.config.url || ""), baseURL).toString();
+      const setCookie = response.headers["set-cookie"];
+      const cookies = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
+      for (const cookie of cookies) {
+        jar.setCookieSync(cookie, url);
+      }
+      return response;
+    });
+
+    const loginPath = this.config.get<string>("BIOTIME_WEB_LOGIN_PATH") || "/login/";
+    const loginPage = await client.get<string>(loginPath);
+    const csrf = this.extractCsrf(loginPage.data, jar);
+    const payload = new URLSearchParams({
+      username: this.required("BIOTIME_USERNAME"),
+      password: this.required("BIOTIME_PASSWORD"),
+      login_type: "pwd"
+    });
+
+    await client.post(loginPath, payload.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-CSRFToken": csrf,
+        Referer: new URL(loginPath, baseURL).toString()
+      }
+    });
+
+    const response = await client.get<ArrayBuffer>(pathOrUrl, { responseType: "arraybuffer" });
+    const contentType = String(response.headers["content-type"] || "application/octet-stream");
+    if (contentType.toLowerCase().includes("text/html")) {
+      throw new Error(`Image BioTime introuvable ou protégée: ${pathOrUrl}`);
+    }
+
+    return {
+      buffer: Buffer.from(response.data),
+      contentType
+    };
+  }
+
+  private extractCsrf(html: string, jar: CookieJar) {
+    const hidden = /name=["']csrfmiddlewaretoken["']\s+value=["']([^"']+)["']/i.exec(html)
+      || /value=["']([^"']+)["']\s+name=["']csrfmiddlewaretoken["']/i.exec(html);
+    if (hidden?.[1]) return hidden[1];
+
+    const cookies = jar.getCookiesSync(this.required("BIOTIME_BASE_URL"));
+    const cookie = cookies.find(item => item.key === "csrftoken");
+    if (cookie?.value) return cookie.value;
+
+    throw new Error("Token CSRF BioTime introuvable.");
   }
 
   private async paginatedGet(path: string, params: Record<string, string>, onProgress?: ProgressCallback, maxPagesOverride?: number) {
@@ -146,6 +246,39 @@ export class BioTimeClientService {
     }
 
     return rows;
+  }
+
+  private async requestWithAuth<T>(method: "get" | "post" | "patch", path: string, data?: unknown, headers: Record<string, string> = {}): Promise<T> {
+    await this.authenticate();
+    let retriedAfterAuthFailure = false;
+    let retriedAfterLicenseActivation = false;
+
+    while (true) {
+      try {
+        const response = await this.client.request<T>({
+          method,
+          url: path,
+          data,
+          headers: { ...this.authHeaders(), ...headers }
+        });
+        return response.data;
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 403 && !retriedAfterLicenseActivation) {
+          retriedAfterLicenseActivation = true;
+          await this.reactivateLicenseAfter403(error);
+          continue;
+        }
+
+        if (axios.isAxiosError(error) && error.response?.status === 401 && !retriedAfterAuthFailure) {
+          retriedAfterAuthFailure = true;
+          this.token = null;
+          await this.authenticate();
+          continue;
+        }
+
+        throw error;
+      }
+    }
   }
 
   private async authenticate(retriedAfterLicenseActivation = false): Promise<void> {

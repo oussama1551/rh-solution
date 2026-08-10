@@ -223,7 +223,7 @@ export class AttendancePunchesService {
 
   async employeeMonthlyCalendar(employeeId: string, month: string, actor?: RequestUser) {
     const range = resolveRange({ month });
-    const [rawDays, summaryRecords, employeeFallback] = await Promise.all([
+    const [rawDays, summaryRecords, employeeFallback, liveDeclarations] = await Promise.all([
       this.buildDailyRows({ employeeId }, range, actor),
       this.prisma.attendanceSummaryRecord.findMany({
         where: {
@@ -237,15 +237,18 @@ export class AttendancePunchesService {
       this.prisma.employee.findFirst({
         where: { id: employeeId, ...employeeScopeWhere(actor) },
         select: employeeCalendarSelect()
-      })
+      }),
+      this.loadCalendarDeclarations(employeeId, range)
     ]);
     const summaryByDate = new Map(summaryRecords.map(record => [localDateKey(record.workDate), record]));
+    const liveStatusByDate = new Map(liveDeclarations.map(row => [row.workDate, row]));
     const daysByDate = new Map<string, any>(
       rawDays.map(day => [
         day.workDate,
         {
           ...day,
-          summaryStatus: summaryByDate.get(day.workDate)?.status || null,
+          summaryStatus: liveStatusByDate.get(day.workDate)?.status || summaryByDate.get(day.workDate)?.status || null,
+          shiftLabel: liveStatusByDate.get(day.workDate)?.label || day.shiftLabel,
           overtimeHours: Number(summaryByDate.get(day.workDate)?.overtimeHours || 0),
           overtimeHoursRate50: Number(summaryByDate.get(day.workDate)?.overtimeHoursRate50 || 0),
           overtimeHoursRate75: Number(summaryByDate.get(day.workDate)?.overtimeHoursRate75 || 0),
@@ -259,6 +262,10 @@ export class AttendancePunchesService {
         const workDate = localDateKey(record.workDate);
         if (daysByDate.has(workDate)) continue;
         daysByDate.set(workDate, syntheticCalendarDay(record, employee));
+      }
+      for (const declaration of liveDeclarations) {
+        if (daysByDate.has(declaration.workDate)) continue;
+        daysByDate.set(declaration.workDate, syntheticCalendarDayFromStatus(employeeId, declaration.workDate, declaration.status, declaration.label, employee));
       }
     }
     const days = [...daysByDate.values()]
@@ -286,6 +293,28 @@ export class AttendancePunchesService {
         incompleteDays: days.filter(day => day.isIncomplete).length
       }
     };
+  }
+
+  private async loadCalendarDeclarations(employeeId: string, range: { from: Date; to: Date; fromKey: string; toKey: string }) {
+    const [sickLeaves, leaves, absenceReversals] = await Promise.all([
+      this.prisma.sickLeaveDeclaration.findMany({
+        where: { employeeId, dateStart: { lte: range.to }, dateEnd: { gte: range.from }, status: ApprovalStatus.APPROVED },
+        select: { dateStart: true, dateEnd: true }
+      }),
+      this.prisma.leaveDeclaration.findMany({
+        where: { employeeId, dateStart: { lte: range.to }, dateEnd: { gte: range.from }, status: ApprovalStatus.APPROVED },
+        select: { dateStart: true, dateEnd: true }
+      }),
+      this.prisma.absenceReversalRequest.findMany({
+        where: { employeeId, absenceDate: { gte: range.from, lte: range.to }, status: ApprovalStatus.APPROVED },
+        select: { absenceDate: true }
+      })
+    ]);
+    const rows: Array<{ workDate: string; status: AttendanceSummaryStatus; label: string }> = [];
+    sickLeaves.forEach(row => pushDeclarationDays(rows, range, row.dateStart, row.dateEnd, AttendanceSummaryStatus.SICK, "Maladie"));
+    leaves.forEach(row => pushDeclarationDays(rows, range, row.dateStart, row.dateEnd, AttendanceSummaryStatus.LEAVE, "Congé"));
+    absenceReversals.forEach(row => rows.push({ workDate: localDateKey(row.absenceDate), status: AttendanceSummaryStatus.ABSENCE_REVERSED, label: "Sans preuve de pointage" }));
+    return rows;
   }
 
   private async buildDailyRows(
@@ -694,10 +723,66 @@ function syntheticCalendarDay(record: {
   };
 }
 
+function syntheticCalendarDayFromStatus(employeeId: string, workDate: string, status: AttendanceSummaryStatus, label: string, employee: any) {
+  const shiftType = status === AttendanceSummaryStatus.REST ? "REPOS" : "FLEXIBLE";
+  return {
+    id: `${employeeId}:${workDate}:declaration`,
+    workDate,
+    employee: {
+      ...employee,
+      displayMatricule: employee.localMatricule || employee.biotimeCode || employee.employeeCode,
+      sapPhone: employee.sapDirectoryRecords?.[0]?.mobile || null,
+      sapCompany: employee.sapDirectoryRecords?.[0]?.sapCompany || null,
+      sapEmpId: employee.sapDirectoryRecords?.[0]?.sapEmpId || null
+    },
+    firstPunchTime: null,
+    lastPunchTime: null,
+    firstPunchId: null,
+    lastPunchId: null,
+    punchCount: 0,
+    workedHours: 0,
+    overtimeHours: 0,
+    overtimeHoursRate50: 0,
+    overtimeHoursRate75: 0,
+    overtimeHoursRate100: 0,
+    timing: "NORMAL",
+    shiftType,
+    shiftLabel: label,
+    assignmentSource: "summary",
+    assignedVia: null,
+    sourceGroupId: null,
+    sourceGroupName: null,
+    serviceStatus: "complete",
+    isIncomplete: false,
+    sourceDevice: null,
+    summaryStatus: status
+  };
+}
+
+function pushDeclarationDays(
+  rows: Array<{ workDate: string; status: AttendanceSummaryStatus; label: string }>,
+  range: { fromKey: string; toKey: string },
+  from: Date,
+  to: Date,
+  status: AttendanceSummaryStatus,
+  label: string
+) {
+  const cursor = new Date(Math.max(new Date(`${range.fromKey}T00:00:00`).getTime(), from.getTime()));
+  const end = new Date(Math.min(new Date(`${range.toKey}T00:00:00`).getTime(), to.getTime()));
+  while (cursor <= end) {
+    const workDate = localDateKey(cursor);
+    const existingIndex = rows.findIndex(row => row.workDate === workDate);
+    const value = { workDate, status, label };
+    if (existingIndex >= 0) rows[existingIndex] = value;
+    else rows.push(value);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+}
+
 function summaryStatusCalendarLabel(status: AttendanceSummaryStatus) {
   if (status === AttendanceSummaryStatus.LEAVE) return "Congé";
   if (status === AttendanceSummaryStatus.SICK) return "Maladie";
-  if (status === AttendanceSummaryStatus.ACCIDENT) return "Accident";
+  if (status === AttendanceSummaryStatus.ACCIDENT) return "Maladie";
   if (status === AttendanceSummaryStatus.REST) return "Repos";
   if (status === AttendanceSummaryStatus.COMPENSATED) return "Compensé";
   if (status === AttendanceSummaryStatus.ABSENT) return "Absent";

@@ -7,11 +7,12 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     cache: "no-store",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       "Cache-Control": "no-cache, no-store, must-revalidate",
       Pragma: "no-cache",
       Expires: "0",

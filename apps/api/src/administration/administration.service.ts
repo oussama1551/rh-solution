@@ -71,7 +71,7 @@ export class AdministrationService {
         id: unit.id,
         name: unit.name,
         code: unit.code,
-        subUnits: unit.subUnits.map(subUnit => ({ id: subUnit.id, name: subUnit.name }))
+        subUnits: unit.subUnits.map(subUnit => ({ id: subUnit.id, name: subUnit.name, biotimeDepartmentCode: (subUnit as any).biotimeDepartmentCode || null }))
       }))
     };
   }

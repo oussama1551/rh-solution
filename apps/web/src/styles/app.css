@@ -526,6 +526,18 @@ select {
 .badge-blue { color: var(--blue); background: #dbeafe; }
 .badge-gray { color: #475569; background: #e2e8f0; }
 
+.biometric-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.biometric-badge {
+  gap: 5px;
+  padding: 0 8px;
+}
+
 .alert {
   padding: 12px 14px;
   border-radius: 8px;
@@ -546,6 +558,15 @@ select {
   background: #f0fdf4;
   color: var(--green);
   border-color: #bbf7d0;
+}
+
+.alert-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
 }
 
 .approval-status {
@@ -630,6 +651,11 @@ select {
   display: block;
   margin: 4px 0;
   font-size: 18px;
+}
+
+.employee-profile-actions {
+  display: grid;
+  gap: 8px;
 }
 
 .inline-edit-panel {
@@ -1646,11 +1672,6 @@ select {
 .report-status-leave {
   background: #ecfeff;
   box-shadow: inset 4px 0 0 #0891b2;
-}
-
-.report-status-accident {
-  background: #fee2e2;
-  box-shadow: inset 4px 0 0 #dc2626;
 }
 
 .report-status-compensated {

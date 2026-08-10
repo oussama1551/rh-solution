@@ -46,7 +46,10 @@ describe("ReportsService", () => {
       },
       attendancePunch: {
         findMany: jest.fn().mockResolvedValue([])
-      }
+      },
+      sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      leaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) }
     };
     const service = new ReportsService(prisma);
 
@@ -105,6 +108,10 @@ describe("ReportsService", () => {
         }
       ]) },
       attendancePunch: { findMany: jest.fn().mockResolvedValue([]) }
+      ,
+      sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      leaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) }
     };
     const service = new ReportsService(prisma);
 
@@ -154,7 +161,10 @@ describe("ReportsService", () => {
           biotimeId: "bio-1",
           zktecoPunchId: "zk-1"
         }
-      ]) }
+      ]) },
+      sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      leaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) }
     };
     const service = new ReportsService(prisma);
 
@@ -175,6 +185,84 @@ describe("ReportsService", () => {
         sourceId: "bio-1"
       }]
     }));
+  });
+
+  it("exclut un congé approuvé des absences du jour", async () => {
+    const employee = {
+      id: "emp-leave",
+      biotimeCode: "802",
+      localMatricule: "FABCOM_DEV-802",
+      employeeCode: "802",
+      fullName: "KHANFRI ZAKARIA",
+      department: "FAB CONTROL QUALITE",
+      group: { name: "KHANFRI ZEKI - AFFINAGE", subUnit: { name: "FAB C Qualité", unit: { name: "FABCOM" } } }
+    };
+    const prisma: any = {
+      employee: { findMany: jest.fn().mockResolvedValue([employee]) },
+      shiftDefinition: { findMany: jest.fn().mockResolvedValue([
+        { id: "shift-morning", shiftType: "MORNING", label: "Matin", startTime: "06:00", endTime: "15:00", spansMidnight: false, marginMinutes: 0 }
+      ]) },
+      employeeShiftAssignment: { findMany: jest.fn().mockResolvedValue([
+        {
+          employeeId: "emp-leave",
+          date: new Date("2026-08-09T00:00:00.000Z"),
+          shiftDefinitionId: "shift-morning",
+          assignedVia: "group",
+          sourceGroupId: "group-1",
+          sourceGroup: { id: "group-1", name: "KHANFRI ZEKI - AFFINAGE" },
+          shiftDefinition: { id: "shift-morning", shiftType: "MORNING", label: "Matin", startTime: "06:00", endTime: "15:00", marginMinutes: 0 }
+        }
+      ]) },
+      attendancePunch: { findMany: jest.fn().mockResolvedValue([]) },
+      sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      leaveDeclaration: { findMany: jest.fn().mockResolvedValue([{ employeeId: "emp-leave" }]) },
+      absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) }
+    };
+    const service = new ReportsService(prisma);
+
+    const report = await service.dailyAbsences({ date: "2026-08-09", search: "KHANFRI" });
+
+    expect(report.totals).toEqual({ planned: 0, absent: 0, notDue: 0 });
+    expect(report.rows).toEqual([]);
+  });
+
+  it("exclut une maladie approuvée des absences du jour", async () => {
+    const employee = {
+      id: "emp-sick",
+      biotimeCode: "725",
+      localMatricule: "FABCOM_DEV-725",
+      employeeCode: "725",
+      fullName: "FILALI LAKHDAR",
+      department: "FAB PRODUCTION",
+      group: { name: "ENV BM G1", subUnit: { name: "FAB Production Assemblage", unit: { name: "FABCOM" } } }
+    };
+    const prisma: any = {
+      employee: { findMany: jest.fn().mockResolvedValue([employee]) },
+      shiftDefinition: { findMany: jest.fn().mockResolvedValue([
+        { id: "shift-morning", shiftType: "MORNING", label: "Matin", startTime: "06:00", endTime: "15:00", spansMidnight: false, marginMinutes: 0 }
+      ]) },
+      employeeShiftAssignment: { findMany: jest.fn().mockResolvedValue([
+        {
+          employeeId: "emp-sick",
+          date: new Date("2026-08-09T00:00:00.000Z"),
+          shiftDefinitionId: "shift-morning",
+          assignedVia: "group",
+          sourceGroupId: "group-1",
+          sourceGroup: { id: "group-1", name: "ENV BM G1" },
+          shiftDefinition: { id: "shift-morning", shiftType: "MORNING", label: "Matin", startTime: "06:00", endTime: "15:00", marginMinutes: 0 }
+        }
+      ]) },
+      attendancePunch: { findMany: jest.fn().mockResolvedValue([]) },
+      sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([{ employeeId: "emp-sick" }]) },
+      leaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) }
+    };
+    const service = new ReportsService(prisma);
+
+    const report = await service.dailyAbsences({ date: "2026-08-09", search: "FILALI" });
+
+    expect(report.totals).toEqual({ planned: 0, absent: 0, notDue: 0 });
+    expect(report.rows).toEqual([]);
   });
   const shift = {
     id: "shift-day",
@@ -305,6 +393,9 @@ describe("ReportsService", () => {
       attendancePunch: {
         findMany: jest.fn().mockResolvedValue([])
       },
+      sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      leaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
+      absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) },
       attendanceFlag: {
         count: jest.fn().mockResolvedValue(2)
       },

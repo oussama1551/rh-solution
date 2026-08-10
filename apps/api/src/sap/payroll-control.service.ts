@@ -8,7 +8,7 @@ import { parseDateKey } from "../reports/date-utils";
 import { SapHanaClientService } from "./sap-client.service";
 import { PayrollControlQueryDto } from "./dto/payroll-control.dto";
 
-type Category = "absence" | "overtime50" | "overtime75" | "overtime100" | "sick" | "accident" | "compensation";
+type Category = "absence" | "overtime50" | "overtime75" | "overtime100" | "sick" | "compensation";
 
 type CategoryValues = Record<Category, number>;
 
@@ -18,7 +18,6 @@ const ZERO_VALUES: CategoryValues = {
   overtime75: 0,
   overtime100: 0,
   sick: 0,
-  accident: 0,
   compensation: 0
 };
 
@@ -87,7 +86,11 @@ export class PayrollControlService {
       this.prisma.payrollImportLine.groupBy({ by: ["rubricCode"], _count: { _all: true } })
     ]);
     const countByCode = new Map(counts.map(row => [row.rubricCode, row._count._all]));
-    return mappings.map(mapping => ({ ...mapping, importCount: countByCode.get(mapping.rubricCode) || 0 }));
+    return mappings.map(mapping => ({
+      ...mapping,
+      mapsTo: mapping.mapsTo === PayrollMapTarget.ACCIDENT ? PayrollMapTarget.SICK : mapping.mapsTo,
+      importCount: countByCode.get(mapping.rubricCode) || 0
+    }));
   }
 
   async updateRubric(rubricCode: string, mapsTo: PayrollMapTarget, actor: RequestUser) {
@@ -131,8 +134,7 @@ export class PayrollControlService {
       employeeById.set(record.employeeId, record.employee);
       const current = rhByEmployee.get(record.employeeId) || cloneValues();
       if (record.status === "ABSENT") current.absence += 1;
-      if (record.status === "SICK") current.sick += 1;
-      if (record.status === "ACCIDENT") current.accident += 1;
+      if (record.status === "SICK" || record.status === "ACCIDENT") current.sick += 1;
       if (record.status === "COMPENSATED") current.compensation += 1;
       current.overtime50 += Number(record.overtimeHoursRate50);
       current.overtime75 += Number(record.overtimeHoursRate75);
@@ -212,7 +214,6 @@ export class PayrollControlService {
       "Matricule", "Employé", "Organigramme", "Écart",
       "RH Abs", "SAP Abs", "Diff Abs",
       "RH Maladie", "SAP Maladie", "Diff Maladie",
-      "RH Accident", "SAP Accident", "Diff Accident",
       "RH Comp", "SAP Comp", "Diff Comp",
       "RH Sup50", "SAP Sup50", "Diff Sup50",
       "RH Sup75", "SAP Sup75", "Diff Sup75",
@@ -225,7 +226,6 @@ export class PayrollControlService {
       row.hasDiff ? "OUI" : "NON",
       row.rh.absence, row.sap.absence, row.diff.absence,
       row.rh.sick, row.sap.sick, row.diff.sick,
-      row.rh.accident, row.sap.accident, row.diff.accident,
       row.rh.compensation, row.sap.compensation, row.diff.compensation,
       row.rh.overtime50, row.sap.overtime50, row.diff.overtime50,
       row.rh.overtime75, row.sap.overtime75, row.diff.overtime75,
@@ -249,8 +249,7 @@ function addMappedValue(values: CategoryValues, target: PayrollMapTarget, base: 
   if (target === PayrollMapTarget.OVERTIME_50) values.overtime50 += base;
   if (target === PayrollMapTarget.OVERTIME_75) values.overtime75 += base;
   if (target === PayrollMapTarget.OVERTIME_100) values.overtime100 += base;
-  if (target === PayrollMapTarget.SICK) values.sick += base;
-  if (target === PayrollMapTarget.ACCIDENT) values.accident += base;
+  if (target === PayrollMapTarget.SICK || target === PayrollMapTarget.ACCIDENT) values.sick += base;
   if (target === PayrollMapTarget.COMPENSATION) values.compensation += base;
 }
 

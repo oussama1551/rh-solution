@@ -12,7 +12,8 @@ import { CreateAttendanceBlockDto } from "./dto/create-attendance-block.dto";
 import { RejectAttendanceFlagDto } from "./dto/reject-attendance-flag.dto";
 import { ShiftPlanningService } from "./shift-planning.service";
 import { ManualDeclarationsService } from "./manual-declarations.service";
-import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateAbsenceTypeDeclarationDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, CreateWorkAccidentDeclarationDto, UpdateAbsenceTypeCodeDto } from "./dto/manual-declarations.dto";
+import { PresumedAbsenceService } from "./presumed-absence.service";
+import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
 
 @Controller("attendance")
 export class AttendanceController {
@@ -21,7 +22,8 @@ export class AttendanceController {
     private readonly blocks: AttendanceBlocksService,
     private readonly punches: AttendancePunchesService,
     private readonly planning: ShiftPlanningService,
-    private readonly declarations: ManualDeclarationsService
+    private readonly declarations: ManualDeclarationsService,
+    private readonly presumedAbsences: PresumedAbsenceService
   ) {}
 
   @Get("shift-definitions")
@@ -130,6 +132,35 @@ export class AttendanceController {
     return this.punches.employeeMonthlyCalendar(id, month || new Date().toISOString().slice(0, 7), actor);
   }
 
+  @Get("presumed-absences")
+  @Permissions(PermissionCode.AttendanceRead)
+  presumedAbsenceList(
+    @Query("status") status: string | undefined,
+    @Query("date") date: string | undefined,
+    @Query("search") search: string | undefined,
+    @CurrentUser() actor: RequestUser
+  ) {
+    return this.presumedAbsences.list({ status, date, search }, actor);
+  }
+
+  @Post("presumed-absences/detect")
+  @Permissions(PermissionCode.AttendanceRead)
+  detectPresumedAbsences(@Query("date") date?: string) {
+    return this.presumedAbsences.detectForToday(new Date(), date);
+  }
+
+  @Patch("presumed-absences/:id/confirm")
+  @Permissions(PermissionCode.AttendanceRead)
+  confirmPresumedAbsence(@Param("id") id: string, @CurrentUser() actor: RequestUser) {
+    return this.presumedAbsences.confirm(id, actor);
+  }
+
+  @Patch("presumed-absences/:id/reject")
+  @Permissions(PermissionCode.AttendanceRead)
+  rejectPresumedAbsence(@Param("id") id: string, @Body() dto: { reason?: string }, @CurrentUser() actor: RequestUser) {
+    return this.presumedAbsences.reject(id, actor, dto.reason);
+  }
+
   @Get("flags/pending")
   @Permissions(PermissionCode.AttendanceManage)
   listPendingFlags() {
@@ -202,30 +233,6 @@ export class AttendanceController {
     return this.declarations.createAbsenceReversal(dto, user);
   }
 
-  @Get("absence-types")
-  @Permissions(PermissionCode.AttendanceRead)
-  absenceTypeCodes(@Query("activeOnly") activeOnly?: string) {
-    return this.declarations.absenceTypeCodes(activeOnly === "true");
-  }
-
-  @Patch("absence-types/:code")
-  @Permissions(PermissionCode.AdministrationManage)
-  updateAbsenceTypeCode(@Param("code") code: string, @Body() dto: UpdateAbsenceTypeCodeDto, @CurrentUser() user: RequestUser) {
-    return this.declarations.updateAbsenceTypeCode(code, dto, user);
-  }
-
-  @Post("declarations/absence-types")
-  @Permissions(PermissionCode.AttendanceRead)
-  createAbsenceTypeDeclaration(@Body() dto: CreateAbsenceTypeDeclarationDto, @CurrentUser() user: RequestUser) {
-    return this.declarations.createAbsenceTypeDeclaration(dto, user);
-  }
-
-  @Get("declarations/absence-types")
-  @Permissions(PermissionCode.AttendanceRead)
-  listAbsenceTypeDeclarations(@CurrentUser() user: RequestUser, @Query("employeeId") employeeId?: string) {
-    return this.declarations.listAbsenceTypeDeclarations(user, employeeId);
-  }
-
   @Get("declarations/absence-reversals")
   @Permissions(PermissionCode.AttendanceRead)
   listAbsenceReversals(@CurrentUser() user: RequestUser, @Query("employeeId") employeeId?: string) {
@@ -272,30 +279,6 @@ export class AttendanceController {
   @Permissions(PermissionCode.AttendanceRead)
   deleteLeave(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.declarations.deleteLeave(id, user);
-  }
-
-  @Post("declarations/work-accidents")
-  @Permissions(PermissionCode.AttendanceRead)
-  createWorkAccident(@Body() dto: CreateWorkAccidentDeclarationDto, @CurrentUser() user: RequestUser) {
-    return this.declarations.createWorkAccident(dto, user);
-  }
-
-  @Get("declarations/work-accidents")
-  @Permissions(PermissionCode.AttendanceRead)
-  listWorkAccidents(@CurrentUser() user: RequestUser, @Query("employeeId") employeeId?: string) {
-    return this.declarations.listWorkAccidents(user, employeeId);
-  }
-
-  @Patch("declarations/work-accidents/:id")
-  @Permissions(PermissionCode.AttendanceRead)
-  updateWorkAccident(@Param("id") id: string, @Body() dto: CreateWorkAccidentDeclarationDto, @CurrentUser() user: RequestUser) {
-    return this.declarations.updateWorkAccident(id, dto, user);
-  }
-
-  @Delete("declarations/work-accidents/:id")
-  @Permissions(PermissionCode.AttendanceRead)
-  deleteWorkAccident(@Param("id") id: string, @CurrentUser() user: RequestUser) {
-    return this.declarations.deleteWorkAccident(id, user);
   }
 
   @Get("declarations/pending")
@@ -352,15 +335,4 @@ export class AttendanceController {
     return this.declarations.rejectAbsenceReversal(id, dto.reason, user);
   }
 
-  @Patch("declarations/absence-types/:id/approve")
-  @Permissions(PermissionCode.AttendanceManage)
-  approveAbsenceTypeDeclaration(@Param("id") id: string, @CurrentUser() user: RequestUser) {
-    return this.declarations.approveAbsenceTypeDeclaration(id, user);
-  }
-
-  @Patch("declarations/absence-types/:id/reject")
-  @Permissions(PermissionCode.AttendanceManage)
-  rejectAbsenceTypeDeclaration(@Param("id") id: string, @Body() dto: { reason?: string }, @CurrentUser() user: RequestUser) {
-    return this.declarations.rejectAbsenceTypeDeclaration(id, dto.reason, user);
-  }
 }

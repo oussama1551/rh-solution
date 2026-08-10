@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import * as ExcelJS from "exceljs";
 import PDFDocument = require("pdfkit");
-import { AbsenceRecapRow, DepartmentReportRow, MonthlyEmployeeReport, SummaryReportRow } from "./reports.types";
+import { DepartmentReportRow, MonthlyEmployeeReport, SummaryReportRow } from "./reports.types";
 
 @Injectable()
 export class ReportsExportService {
@@ -121,7 +121,6 @@ export class ReportsExportService {
       { header: "Absents", key: "absentDays", width: 12 },
       { header: "Maladie", key: "sickDays", width: 12 },
       { header: "Congé", key: "leaveDays", width: 12 },
-      { header: "Accident", key: "accidentDays", width: 12 },
       { header: "Compensation", key: "compensatedDays", width: 16 },
       { header: "Sans preuve", key: "absenceReversedDays", width: 16 },
       { header: "Repos", key: "restDays", width: 12 },
@@ -147,7 +146,6 @@ export class ReportsExportService {
       String(row.absentDays),
       String(row.sickDays),
       String(row.leaveDays),
-      String(row.accidentDays),
       String(row.compensatedDays),
       String(row.absenceReversedDays),
       String(row.restDays),
@@ -157,58 +155,7 @@ export class ReportsExportService {
       `${row.overtimeHoursRate75} h`,
       `${row.overtimeHoursRate100} h`
     ]);
-    return this.pdf("Rapport de synthèse paie", ["Matricule", "Employé", "Org", "Prés.", "Abs.", "Mal.", "Congé", "Acc.", "Comp.", "Sans preuve", "Repos", "Inc.", "H. trav.", "Sup.50", "Sup.75", "Sup.100"], lines);
-  }
-
-  async absenceRecapExcel(rows: AbsenceRecapRow[]): Promise<Buffer> {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = "RH Solution";
-    const sheet = workbook.addWorksheet("Récap absences");
-    sheet.columns = [
-      { header: "Date", key: "date", width: 14 },
-      { header: "Matricule", key: "code", width: 18 },
-      { header: "Employé", key: "fullName", width: 28 },
-      { header: "Unité", key: "unitName", width: 18 },
-      { header: "Sous-unité", key: "subUnitName", width: 24 },
-      { header: "Groupe", key: "groupName", width: 20 },
-      { header: "Statut", key: "classificationStatus", width: 14 },
-      { header: "Code", key: "typeCode", width: 10 },
-      { header: "Libellé", key: "typeLabel", width: 28 },
-      { header: "Note", key: "note", width: 28 },
-      { header: "Classifié par", key: "declaredBy", width: 24 },
-      { header: "Approuvé par", key: "approvedBy", width: 24 }
-    ];
-    rows.forEach(row => sheet.addRow({
-      date: row.date,
-      code: row.employee.code,
-      fullName: row.employee.fullName,
-      unitName: row.employee.unitName || "",
-      subUnitName: row.employee.subUnitName || "",
-      groupName: row.employee.groupName || "",
-      classificationStatus: row.classificationStatus === "CONFIRMED" ? "Confirmé" : "En attente",
-      typeCode: row.type?.code || "",
-      typeLabel: row.type?.label || "",
-      note: row.declaration?.note || "",
-      declaredBy: row.declaration?.declaredBy?.fullName || row.declaration?.declaredBy?.username || "",
-      approvedBy: row.declaration?.approvedBy?.fullName || row.declaration?.approvedBy?.username || ""
-    }));
-    this.styleWorksheet(sheet);
-    const buffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(buffer);
-  }
-
-  absenceRecapPdf(rows: AbsenceRecapRow[]): Promise<Buffer> {
-    const lines = rows.map(row => [
-      row.date,
-      row.employee.code,
-      row.employee.fullName,
-      [row.employee.unitName, row.employee.subUnitName, row.employee.groupName].filter(Boolean).join(" > ") || "-",
-      row.classificationStatus === "CONFIRMED" ? "Confirmé" : "En attente",
-      row.type ? `${row.type.code} ${row.type.label}` : "-",
-      row.declaration?.declaredBy?.fullName || row.declaration?.declaredBy?.username || "-",
-      row.declaration?.approvedBy?.fullName || row.declaration?.approvedBy?.username || "-"
-    ]);
-    return this.pdf("Récap des absences", ["Date", "Matricule", "Employé", "Org", "Statut", "Type", "Classifié par", "Approuvé par"], lines);
+    return this.pdf("Rapport de synthèse paie", ["Matricule", "Employé", "Org", "Prés.", "Abs.", "Mal.", "Congé", "Comp.", "Sans preuve", "Repos", "Inc.", "H. trav.", "Sup.50", "Sup.75", "Sup.100"], lines);
   }
 
   private styleWorksheet(sheet: ExcelJS.Worksheet) {

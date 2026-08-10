@@ -6,7 +6,7 @@ import { RequestUser } from "../common/request-user.type";
 import { PrismaService } from "../prisma/prisma.service";
 import { enumerateDateKeys, parseDateKey, toDateKey } from "./date-utils";
 import { ReportsService } from "./reports.service";
-import { AbsenceRecapReport, ReportFilters, SummaryDailyRecordRow, SummaryReportRow } from "./reports.types";
+import { ReportFilters, SummaryDailyRecordRow, SummaryReportRow } from "./reports.types";
 
 @Injectable()
 export class AttendanceSummaryService {
@@ -29,7 +29,7 @@ export class AttendanceSummaryService {
 
     const from = parseDateKey(filters.startDate);
     const to = parseDateKey(filters.endDate);
-    const [overtime, compensations, sickLeaves, workAccidents, leaves, absenceReversals, absenceTypes] = await Promise.all([
+    const [overtime, compensations, sickLeaves, leaves, absenceReversals] = await Promise.all([
       this.prisma.overtimeDeclaration.findMany({
         where: { employeeId: { in: employeeIds }, date: { gte: from, lte: to }, status: ApprovalStatus.APPROVED }
       }),
@@ -51,14 +51,6 @@ export class AttendanceSummaryService {
           status: ApprovalStatus.APPROVED
         }
       }),
-      this.prisma.workAccidentDeclaration.findMany({
-        where: {
-          employeeId: { in: employeeIds },
-          dateStart: { lte: to },
-          dateEnd: { gte: from },
-          status: ApprovalStatus.APPROVED
-        }
-      }),
       this.prisma.leaveDeclaration.findMany({
         where: {
           employeeId: { in: employeeIds },
@@ -71,13 +63,6 @@ export class AttendanceSummaryService {
         where: {
           employeeId: { in: employeeIds },
           absenceDate: { gte: from, lte: to },
-          status: ApprovalStatus.APPROVED
-        }
-      }),
-      this.prisma.absenceTypeDeclaration.findMany({
-        where: {
-          employeeId: { in: employeeIds },
-          date: { gte: from, lte: to },
           status: ApprovalStatus.APPROVED
         }
       })
@@ -96,17 +81,10 @@ export class AttendanceSummaryService {
     });
     const compensationDates = new Set(compensations.map(row => `${row.employeeId}:${toDateKey(row.compensationDate)}`));
     const absenceReversalDates = new Set(absenceReversals.map(row => `${row.employeeId}:${toDateKey(row.absenceDate)}`));
-    const absenceTypeByEmployeeDate = new Map(absenceTypes.map(row => [`${row.employeeId}:${toDateKey(row.date)}`, row.typeCode]));
     const sickDates = new Set<string>();
     sickLeaves.forEach(row => {
       for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(filters.endDate, toDateKey(row.dateEnd)))) {
         sickDates.add(`${row.employeeId}:${date}`);
-      }
-    });
-    const accidentDates = new Set<string>();
-    workAccidents.forEach(row => {
-      for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(filters.endDate, toDateKey(row.dateEnd)))) {
-        accidentDates.add(`${row.employeeId}:${date}`);
       }
     });
     const leaveDates = new Set<string>();
@@ -134,14 +112,11 @@ export class AttendanceSummaryService {
         const key = `${row.employee.id}:${row.workDate}`;
         writtenKeys.add(key);
         const isSick = sickDates.has(key);
-        const isAccident = accidentDates.has(key);
         const isLeave = leaveDates.has(key);
         const isCompensation = compensationDates.has(key);
         const overtimeHours = overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
         const baseStatus = row.plannedShiftType === "REPOS"
           ? AttendanceSummaryStatus.REST
-          : isAccident
-          ? AttendanceSummaryStatus.ACCIDENT
           : isSick
           ? AttendanceSummaryStatus.SICK
           : isLeave
@@ -152,7 +127,6 @@ export class AttendanceSummaryService {
         const status = baseStatus === AttendanceSummaryStatus.ABSENT && absenceReversalDates.has(key)
           ? AttendanceSummaryStatus.ABSENCE_REVERSED
           : baseStatus;
-        const absenceTypeCode = status === AttendanceSummaryStatus.ABSENT ? absenceTypeByEmployeeDate.get(key) || null : null;
         const leaveDetails = status === AttendanceSummaryStatus.LEAVE ? leaveDetailsByEmployeeDate.get(key) || null : null;
         await tx.attendanceSummaryRecord.upsert({
           where: { employeeId_workDate_periodStart_periodEnd: { employeeId: row.employee.id, workDate: parseDateKey(row.workDate), periodStart: from, periodEnd: to } },
@@ -164,7 +138,6 @@ export class AttendanceSummaryService {
             overtimeHoursRate75: new Prisma.Decimal(overtimeHours.rate75),
             overtimeHoursRate100: new Prisma.Decimal(overtimeHours.rate100),
             isCompensation,
-            absenceTypeCode,
             leaveType: leaveDetails?.leaveType || null,
             exceptionalReason: leaveDetails?.exceptionalReason || null,
             shiftType: row.plannedShiftType as any,
@@ -182,7 +155,6 @@ export class AttendanceSummaryService {
             overtimeHoursRate75: new Prisma.Decimal(overtimeHours.rate75),
             overtimeHoursRate100: new Prisma.Decimal(overtimeHours.rate100),
             isCompensation,
-            absenceTypeCode,
             leaveType: leaveDetails?.leaveType || null,
             exceptionalReason: leaveDetails?.exceptionalReason || null,
             shiftType: row.plannedShiftType as any,
@@ -191,46 +163,6 @@ export class AttendanceSummaryService {
             periodEnd: to
           }
         });
-        count += 1;
-      }
-
-      for (const key of accidentDates) {
-        if (writtenKeys.has(key)) continue;
-        const [employeeId, workDate] = key.split(":");
-        if (!employeeIds.includes(employeeId)) continue;
-        const overtimeHours = overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
-        await tx.attendanceSummaryRecord.upsert({
-          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd: to } },
-          update: {
-            status: AttendanceSummaryStatus.ACCIDENT,
-            workedHours: new Prisma.Decimal(0),
-            overtimeHours: new Prisma.Decimal(overtimeHours.total),
-            overtimeHoursRate50: new Prisma.Decimal(overtimeHours.rate50),
-            overtimeHoursRate75: new Prisma.Decimal(overtimeHours.rate75),
-            overtimeHoursRate100: new Prisma.Decimal(overtimeHours.rate100),
-            isCompensation: false,
-            shiftType: null,
-            generatedAt,
-            periodStart: from,
-            periodEnd: to
-          },
-          create: {
-            employeeId,
-            workDate: parseDateKey(workDate),
-            status: AttendanceSummaryStatus.ACCIDENT,
-            workedHours: new Prisma.Decimal(0),
-            overtimeHours: new Prisma.Decimal(overtimeHours.total),
-            overtimeHoursRate50: new Prisma.Decimal(overtimeHours.rate50),
-            overtimeHoursRate75: new Prisma.Decimal(overtimeHours.rate75),
-            overtimeHoursRate100: new Prisma.Decimal(overtimeHours.rate100),
-            isCompensation: false,
-            shiftType: null,
-            generatedAt,
-            periodStart: from,
-            periodEnd: to
-          }
-        });
-        writtenKeys.add(key);
         count += 1;
       }
 
@@ -408,7 +340,6 @@ export class AttendanceSummaryService {
         absentDays: 0,
         sickDays: 0,
         leaveDays: 0,
-        accidentDays: 0,
         compensatedDays: 0,
         absenceReversedDays: 0,
         restDays: 0,
@@ -422,9 +353,8 @@ export class AttendanceSummaryService {
       };
       if (record.status === AttendanceSummaryStatus.PRESENT) row.presentDays += 1;
       if (record.status === AttendanceSummaryStatus.ABSENT) row.absentDays += 1;
-      if (record.status === AttendanceSummaryStatus.SICK) row.sickDays += 1;
+      if (record.status === AttendanceSummaryStatus.SICK || record.status === AttendanceSummaryStatus.ACCIDENT) row.sickDays += 1;
       if (record.status === AttendanceSummaryStatus.LEAVE) row.leaveDays += 1;
-      if (record.status === AttendanceSummaryStatus.ACCIDENT) row.accidentDays += 1;
       if (record.status === AttendanceSummaryStatus.COMPENSATED) row.compensatedDays += 1;
       if (record.status === AttendanceSummaryStatus.ABSENCE_REVERSED) row.absenceReversedDays += 1;
       if (record.status === AttendanceSummaryStatus.REST) row.restDays += 1;
@@ -463,7 +393,6 @@ export class AttendanceSummaryService {
       id: record.id,
       workDate: toDateKey(record.workDate),
       status: record.status,
-      absenceTypeCode: record.absenceTypeCode,
       workedHours: Number(record.workedHours),
       overtimeHours: Number(record.overtimeHours),
       overtimeHoursRate50: Number(record.overtimeHoursRate50),
@@ -474,100 +403,6 @@ export class AttendanceSummaryService {
       exceptionalReason: record.exceptionalReason,
       generatedAt: record.generatedAt
     }));
-  }
-
-  async absenceRecap(filters: ReportFilters, actor?: RequestUser): Promise<AbsenceRecapReport> {
-    this.validatePeriod(filters.startDate, filters.endDate);
-    const records = await this.prisma.attendanceSummaryRecord.findMany({
-      where: {
-        periodStart: parseDateKey(filters.startDate),
-        periodEnd: parseDateKey(filters.endDate),
-        status: AttendanceSummaryStatus.ABSENT,
-        ...(filters.typeCode ? { absenceTypeCode: filters.typeCode } : {}),
-        ...(filters.classificationStatus === "PENDING" ? { absenceTypeCode: null } : {}),
-        ...(filters.classificationStatus === "CONFIRMED" ? { absenceTypeCode: { not: null } } : {}),
-        employee: (this.reports as any).employeeWhere(filters, actor)
-      },
-      include: {
-        absenceType: true,
-        employee: {
-          select: {
-            id: true,
-            localMatricule: true,
-            biotimeCode: true,
-            employeeCode: true,
-            fullName: true,
-            department: true,
-            group: { select: { name: true, subUnit: { select: { name: true, unit: { select: { name: true } } } } } }
-          }
-        }
-      },
-      orderBy: [{ workDate: "asc" }, { employee: { fullName: "asc" } }]
-    });
-
-    const employeeIds = [...new Set(records.map(record => record.employeeId))];
-    const declarations = employeeIds.length
-      ? await this.prisma.absenceTypeDeclaration.findMany({
-          where: {
-            employeeId: { in: employeeIds },
-            date: { gte: parseDateKey(filters.startDate), lte: parseDateKey(filters.endDate) }
-          },
-          include: {
-            type: true,
-            declaredBy: { select: { id: true, username: true, fullName: true } },
-            approvedBy: { select: { id: true, username: true, fullName: true } }
-          }
-        })
-      : [];
-    const declarationByEmployeeDate = new Map(declarations.map(row => [`${row.employeeId}:${toDateKey(row.date)}`, row]));
-    const byType = new Map<string, { code: string; label: string; days: number }>();
-
-    const rows = records.map(record => {
-      const key = `${record.employeeId}:${toDateKey(record.workDate)}`;
-      const declaration = declarationByEmployeeDate.get(key) || null;
-      const type = record.absenceType || (declaration?.status === ApprovalStatus.APPROVED ? declaration.type : null);
-      if (type) {
-        const stat = byType.get(type.code) || { code: type.code, label: type.label, days: 0 };
-        stat.days += 1;
-        byType.set(type.code, stat);
-      }
-
-      return {
-        id: record.id,
-        date: toDateKey(record.workDate),
-        classificationStatus: record.absenceTypeCode ? "CONFIRMED" as const : "PENDING" as const,
-        employee: {
-          id: record.employee.id,
-          code: record.employee.localMatricule || record.employee.biotimeCode || record.employee.employeeCode,
-          sourceCode: record.employee.biotimeCode || record.employee.employeeCode,
-          fullName: record.employee.fullName,
-          department: record.employee.department,
-          unitName: record.employee.group?.subUnit?.unit?.name || null,
-          subUnitName: record.employee.group?.subUnit?.name || null,
-          groupName: record.employee.group?.name || null
-        },
-        type: type ? { code: type.code, label: type.label } : null,
-        declaration: declaration ? {
-          id: declaration.id,
-          status: declaration.status,
-          note: declaration.note,
-          declaredBy: declaration.declaredBy,
-          approvedBy: declaration.approvedBy,
-          approvedAt: declaration.approvedAt
-        } : null
-      };
-    });
-
-    return {
-      period: { startDate: filters.startDate, endDate: filters.endDate },
-      totals: {
-        absences: rows.length,
-        pending: rows.filter(row => row.classificationStatus === "PENDING").length,
-        confirmed: rows.filter(row => row.classificationStatus === "CONFIRMED").length
-      },
-      byType: [...byType.values()].sort((left, right) => left.code.localeCompare(right.code)),
-      rows
-    };
   }
 
   @Cron(process.env.ATTENDANCE_SUMMARY_CRON || "15 2 * * *")

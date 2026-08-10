@@ -235,7 +235,7 @@ export class ReportsService {
 
     const from = parseDateKey(date);
     const to = parseDateKey(addDays(date, 1));
-    const [definitions, assignments, punches] = await Promise.all([
+    const [definitions, assignments, punches, sickLeaves, leaves, absenceReversals] = await Promise.all([
       this.prisma.shiftDefinition.findMany(),
       this.prisma.employeeShiftAssignment.findMany({
         where: {
@@ -255,7 +255,24 @@ export class ReportsService {
           }
         },
         orderBy: [{ employeeId: "asc" }, { punchTime: "asc" }]
+      }),
+      this.prisma.sickLeaveDeclaration.findMany({
+        where: { employeeId: { in: employeeIds }, dateStart: { lte: from }, dateEnd: { gte: from }, status: ApprovalStatus.APPROVED },
+        select: { employeeId: true }
+      }),
+      this.prisma.leaveDeclaration.findMany({
+        where: { employeeId: { in: employeeIds }, dateStart: { lte: from }, dateEnd: { gte: from }, status: ApprovalStatus.APPROVED },
+        select: { employeeId: true }
+      }),
+      this.prisma.absenceReversalRequest.findMany({
+        where: { employeeId: { in: employeeIds }, absenceDate: from, status: ApprovalStatus.APPROVED },
+        select: { employeeId: true }
       })
+    ]);
+    const justifiedEmployeeIds = new Set([
+      ...sickLeaves.map(row => row.employeeId),
+      ...leaves.map(row => row.employeeId),
+      ...absenceReversals.map(row => row.employeeId)
     ]);
 
     const results = matchDailyAttendance({
@@ -297,6 +314,7 @@ export class ReportsService {
     for (const employee of employees) {
       const assignment = assignmentByEmployee.get(`${employee.id}:${date}`);
       if (!assignment || assignment.shiftDefinition.shiftType === "REPOS") continue;
+      if (justifiedEmployeeIds.has(employee.id)) continue;
 
       planned += 1;
       const result = resultByEmployeeDate.get(`${employee.id}:${date}`);
@@ -345,6 +363,7 @@ export class ReportsService {
     for (const employee of employees) {
       const assignment = assignmentByEmployee.get(`${employee.id}:${date}`);
       if (!assignment || assignment.shiftDefinition.shiftType === "REPOS") continue;
+      if (justifiedEmployeeIds.has(employee.id)) continue;
       const unitName = employee.group?.subUnit?.unit?.name || "Sans unité";
       const row = byUnitMap.get(unitName) || { unitName, planned: 0, absent: 0, notDue: 0 };
       row.planned += 1;

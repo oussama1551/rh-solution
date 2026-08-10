@@ -1,7 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import { validate } from "class-validator";
 import { ApprovalStatus, AttendanceSummaryStatus, ExceptionalLeaveReason, LeaveType, Prisma } from "@prisma/client";
-import { CreateAbsenceReversalRequestDto, CreateAbsenceTypeDeclarationDto, CreateOvertimeDeclarationDto } from "../src/attendance/dto/manual-declarations.dto";
+import { CreateAbsenceReversalRequestDto, CreateOvertimeDeclarationDto } from "../src/attendance/dto/manual-declarations.dto";
 import { ManualDeclarationsService } from "../src/attendance/manual-declarations.service";
 import { AttendanceSummaryService } from "../src/reports/attendance-summary.service";
 import { RoleCode } from "../src/roles/role-codes";
@@ -35,33 +35,6 @@ function declarationsService() {
         declaredBy: null,
         approvedBy: null
       })),
-      findMany: jest.fn().mockResolvedValue([]),
-      update: jest.fn()
-    },
-    absenceTypeCode: {
-      findMany: jest.fn().mockResolvedValue([]),
-      findFirst: jest.fn().mockResolvedValue({ code: "AI", label: "Absence Irrégulière", active: true }),
-      update: jest.fn().mockImplementation(({ where, data }) => Promise.resolve({ code: where.code, label: data.label, active: data.active ?? true }))
-    },
-    absenceTypeDeclaration: {
-      upsert: jest.fn().mockImplementation(({ where, create, update }) => {
-        const data = create || update;
-        return Promise.resolve({
-          id: "abt-1",
-          employeeId: where.employeeId_date.employeeId,
-          date: where.employeeId_date.date,
-          typeCode: data.typeCode,
-          note: data.note,
-          declaredById: data.declaredById,
-          status: data.status,
-          approvedById: data.approvedById,
-          approvedAt: data.approvedAt,
-          employee: { id: where.employeeId_date.employeeId, fullName: "Employé Test" },
-          type: { code: data.typeCode, label: "Absence Irrégulière", active: true },
-          declaredBy: null,
-          approvedBy: null
-        });
-      }),
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn()
     },
@@ -237,50 +210,6 @@ describe("ManualDeclarationsService", () => {
     }));
   });
 
-  it("classifies absences with pending approval for responsables and direct approval for admin", async () => {
-    const { service, prisma } = declarationsService();
-
-    await service.createAbsenceTypeDeclaration({ employeeId: "emp-1", date: "2026-07-30", typeCode: "ai", note: "A justifier" }, manager as any);
-    expect(prisma.absenceTypeDeclaration.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { employeeId_date: { employeeId: "emp-1", date: new Date("2026-07-30T00:00:00.000Z") } },
-      create: expect.objectContaining({ typeCode: "AI", status: ApprovalStatus.PENDING_APPROVAL, approvedById: null })
-    }));
-    expect(prisma.attendanceSummaryRecord.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      data: { absenceTypeCode: null }
-    }));
-
-    await service.createAbsenceTypeDeclaration({ employeeId: "emp-1", date: "2026-07-30", typeCode: "AM" }, admin as any);
-    expect(prisma.absenceTypeDeclaration.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: { employeeId_date: { employeeId: "emp-1", date: new Date("2026-07-30T00:00:00.000Z") } },
-      create: expect.objectContaining({ typeCode: "AM", status: ApprovalStatus.APPROVED, approvedById: "admin" })
-    }));
-    expect(prisma.attendanceSummaryRecord.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ employeeId: "emp-1", status: "ABSENT" }),
-      data: { absenceTypeCode: "AM" }
-    }));
-  });
-
-  it("lets GRH submit absence classification but keeps it pending", async () => {
-    const { service, prisma } = declarationsService();
-
-    await service.createAbsenceTypeDeclaration({ employeeId: "emp-1", date: "2026-07-30", typeCode: "AI" }, grh as any);
-
-    expect(prisma.absenceTypeDeclaration.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
-      create: expect.objectContaining({ status: ApprovalStatus.PENDING_APPROVAL, approvedById: null })
-    }));
-  });
-
-  it("requires an absence type code in DTO validation", async () => {
-    const dto = Object.assign(new CreateAbsenceTypeDeclarationDto(), {
-      employeeId: "00000000-0000-0000-0000-000000000001",
-      date: "2026-07-30",
-      typeCode: ""
-    });
-
-    const errors = await validate(dto);
-    expect(errors.some(error => error.property === "typeCode")).toBe(true);
-  });
-
   it("allows only admin to delete overtime declarations", async () => {
     const { service, prisma } = declarationsService();
     prisma.overtimeDeclaration.findUnique.mockResolvedValue({
@@ -322,10 +251,8 @@ function summaryService(pointages: any[]) {
     overtimeDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
     absenceCompensation: { findMany: jest.fn().mockResolvedValue([]) },
     sickLeaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
-    workAccidentDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
     leaveDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
     absenceReversalRequest: { findMany: jest.fn().mockResolvedValue([]) },
-    absenceTypeDeclaration: { findMany: jest.fn().mockResolvedValue([]) },
     attendanceSummaryRecord: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (callback: any) => callback(tx))
   };
@@ -476,35 +403,7 @@ describe("AttendanceSummaryService", () => {
 
     expect(tx.attendanceSummaryRecord.upsert).toHaveBeenCalledWith(expect.objectContaining({
       update: expect.objectContaining({
-        status: AttendanceSummaryStatus.ABSENT,
-        absenceTypeCode: null
-      })
-    }));
-  });
-
-  it("writes approved absence classification on absent summary days", async () => {
-    const { service, prisma, tx } = summaryService([{
-      employee: { id: "emp-1" },
-      workDate: "2026-07-30",
-      workedHours: 0,
-      plannedShiftType: "MORNING",
-      serviceStatus: "absent"
-    }]);
-    prisma.absenceTypeDeclaration.findMany.mockResolvedValue([{
-      employeeId: "emp-1",
-      date: new Date("2026-07-30T00:00:00.000Z"),
-      typeCode: "AI"
-    }]);
-
-    await service.generateForPeriod({ startDate: "2026-07-26", endDate: "2026-08-25" }, admin as any);
-
-    expect(prisma.absenceTypeDeclaration.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ status: ApprovalStatus.APPROVED })
-    }));
-    expect(tx.attendanceSummaryRecord.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      update: expect.objectContaining({
-        status: AttendanceSummaryStatus.ABSENT,
-        absenceTypeCode: "AI"
+        status: AttendanceSummaryStatus.ABSENT
       })
     }));
   });
@@ -601,52 +500,4 @@ describe("AttendanceSummaryService", () => {
     }));
   });
 
-  it("reports absence recap rows as pending until an approved classification is present", async () => {
-    const { service, prisma } = summaryService([]);
-    const employee = {
-      id: "emp-1",
-      localMatricule: "100",
-      biotimeCode: "100",
-      employeeCode: "100",
-      fullName: "Employé Test",
-      department: "Production",
-      group: { name: "G1", subUnit: { name: "FAB", unit: { name: "FABCOM" } } }
-    };
-    prisma.attendanceSummaryRecord.findMany.mockResolvedValue([
-      {
-        id: "sum-1",
-        employeeId: "emp-1",
-        workDate: new Date("2026-07-30T00:00:00.000Z"),
-        absenceTypeCode: null,
-        absenceType: null,
-        employee
-      },
-      {
-        id: "sum-2",
-        employeeId: "emp-1",
-        workDate: new Date("2026-07-31T00:00:00.000Z"),
-        absenceTypeCode: "AM",
-        absenceType: { code: "AM", label: "Absence Maladie" },
-        employee
-      }
-    ]);
-    prisma.absenceTypeDeclaration.findMany.mockResolvedValue([{
-      id: "abt-2",
-      employeeId: "emp-1",
-      date: new Date("2026-07-31T00:00:00.000Z"),
-      status: ApprovalStatus.APPROVED,
-      note: "Certificat",
-      type: { code: "AM", label: "Absence Maladie" },
-      declaredBy: { id: "manager", username: "manager", fullName: "Manager" },
-      approvedBy: { id: "admin", username: "admin", fullName: "Admin" },
-      approvedAt: new Date("2026-07-31T08:00:00.000Z")
-    }]);
-
-    const report = await service.absenceRecap({ startDate: "2026-07-26", endDate: "2026-08-25" }, admin as any);
-
-    expect(report.totals).toEqual({ absences: 2, pending: 1, confirmed: 1 });
-    expect(report.rows[0]).toEqual(expect.objectContaining({ classificationStatus: "PENDING", type: null }));
-    expect(report.rows[1]).toEqual(expect.objectContaining({ classificationStatus: "CONFIRMED", type: { code: "AM", label: "Absence Maladie" } }));
-    expect(report.byType).toEqual([{ code: "AM", label: "Absence Maladie", days: 1 }]);
-  });
 });

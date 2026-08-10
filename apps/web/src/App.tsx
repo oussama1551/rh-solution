@@ -1,12 +1,12 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { AbsenceRecapPage } from "./pages/AbsenceRecapPage";
 import { useAuth } from "./lib/auth";
 import { AttendancePunchesPage } from "./pages/AttendancePunchesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DailyAbsencesPage } from "./pages/DailyAbsencesPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
+import { EmployeeBioTimeFormPage } from "./pages/EmployeeBioTimeFormPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { LeaveDeclarationPage } from "./pages/LeaveDeclarationPage";
@@ -14,14 +14,15 @@ import { MessagesPage } from "./pages/MessagesPage";
 import { OrgChartPage } from "./pages/OrgChartPage";
 import { OvertimeDeclarationPage } from "./pages/OvertimeDeclarationPage";
 import { PayrollControlPage } from "./pages/PayrollControlPage";
+import { PresumedAbsencesPage } from "./pages/PresumedAbsencesPage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { ResignedEmployeesPage } from "./pages/ResignedEmployeesPage";
 import { SickLeaveDeclarationPage } from "./pages/SickLeaveDeclarationPage";
 import { SummaryReportPage } from "./pages/SummaryReportPage";
 import { NotFoundPage, UsersAdminPage } from "./pages/SimplePages";
 import { SyncAdminPage } from "./pages/SyncAdminPage";
 import { SapDirectoryPage } from "./pages/SapDirectoryPage";
 import { ValidationPage } from "./pages/ValidationPage";
-import { WorkAccidentDeclarationPage } from "./pages/WorkAccidentDeclarationPage";
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -45,14 +46,16 @@ export function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/realtime" element={<AttendancePunchesPage />} />
         <Route path="/absences" element={<DailyAbsencesPage />} />
-        <Route path="/absences/recap" element={<AbsenceRecapPage />} />
+        <Route path="/presumed-absences" element={<PresumedAbsencesPage />} />
         <Route path="/employees" element={<EmployeesPage />} />
+        <Route path="/employees/resigned" element={<ResignedEmployeesPage />} />
+        <Route path="/employees/new" element={<EmployeeBioTimeFormPage />} />
+        <Route path="/employees/:id/edit" element={<EmployeeBioTimeFormPage />} />
         <Route path="/employees/:id" element={<EmployeeDetailPage />} />
         <Route path="/validation" element={<ValidationPage />} />
         <Route path="/overtime" element={<OvertimeDeclarationPage />} />
         <Route path="/sick-leaves" element={<SickLeaveDeclarationPage />} />
         <Route path="/leaves" element={<LeaveDeclarationPage />} />
-        <Route path="/work-accidents" element={<WorkAccidentDeclarationPage />} />
         <Route path="/messages" element={<MessagesPage />} />
         <Route path="/org" element={<OrgChartPage />} />
         <Route path="/devices" element={<DevicesPage />} />

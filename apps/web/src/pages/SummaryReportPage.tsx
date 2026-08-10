@@ -78,7 +78,6 @@ export function SummaryReportPage() {
       absentDays: acc.absentDays + row.absentDays,
       sickDays: acc.sickDays + row.sickDays,
       leaveDays: acc.leaveDays + row.leaveDays,
-      accidentDays: acc.accidentDays + row.accidentDays,
       compensatedDays: acc.compensatedDays + row.compensatedDays,
       absenceReversedDays: acc.absenceReversedDays + row.absenceReversedDays,
       restDays: acc.restDays + row.restDays,
@@ -89,9 +88,9 @@ export function SummaryReportPage() {
       overtime100: acc.overtime100 + row.overtimeHoursRate100,
       overtime: acc.overtime + row.totalOvertimeHours
     }),
-    { presentDays: 0, absentDays: 0, sickDays: 0, leaveDays: 0, accidentDays: 0, compensatedDays: 0, absenceReversedDays: 0, restDays: 0, incompleteDays: 0, workedHours: 0, overtime50: 0, overtime75: 0, overtime100: 0, overtime: 0 }
+    { presentDays: 0, absentDays: 0, sickDays: 0, leaveDays: 0, compensatedDays: 0, absenceReversedDays: 0, restDays: 0, incompleteDays: 0, workedHours: 0, overtime50: 0, overtime75: 0, overtime100: 0, overtime: 0 }
   );
-  const totalDailyRows = totals.presentDays + totals.absentDays + totals.sickDays + totals.leaveDays + totals.accidentDays + totals.compensatedDays + totals.absenceReversedDays + totals.restDays + totals.incompleteDays;
+  const totalDailyRows = totals.presentDays + totals.absentDays + totals.sickDays + totals.leaveDays + totals.compensatedDays + totals.absenceReversedDays + totals.restDays + totals.incompleteDays;
   const lastGeneratedAt = summary.data.reduce<string | null>((latest, row) => {
     if (!latest || row.lastGeneratedAt > latest) return row.lastGeneratedAt;
     return latest;
@@ -152,7 +151,6 @@ export function SummaryReportPage() {
           <div><span>Absences</span><strong>{totals.absentDays}</strong></div>
           <div><span>Maladie</span><strong>{totals.sickDays}</strong></div>
           <div><span>Congé</span><strong>{totals.leaveDays}</strong></div>
-          <div><span>Accident</span><strong>{totals.accidentDays}</strong></div>
           <div><span>Sans preuve</span><strong>{totals.absenceReversedDays}</strong></div>
           <div><span>Heures travaillées</span><strong>{totals.workedHours.toFixed(2)} h</strong></div>
           <div><span>Sup. 50%</span><strong>{totals.overtime50.toFixed(2)} h</strong></div>
@@ -186,7 +184,6 @@ export function SummaryReportPage() {
             { key: "absent", header: "Absents", render: row => row.absentDays, sortValue: row => row.absentDays },
             { key: "sick", header: "Maladie", render: row => row.sickDays, sortValue: row => row.sickDays },
             { key: "leave", header: "Congé", render: row => row.leaveDays, sortValue: row => row.leaveDays },
-            { key: "accident", header: "Accident", render: row => row.accidentDays, sortValue: row => row.accidentDays },
             { key: "comp", header: "Compensés", render: row => row.compensatedDays, sortValue: row => row.compensatedDays },
             { key: "reversed", header: "Sans preuve", render: row => row.absenceReversedDays, sortValue: row => row.absenceReversedDays },
             { key: "rest", header: "Repos", render: row => row.restDays, sortValue: row => row.restDays },
@@ -232,14 +229,13 @@ function SummaryPunchCalendar({ rows, startDate, endDate }: { rows: SummaryDaily
       complete: acc.complete + (row.status === "PRESENT" || row.status === "COMPENSATED" ? 1 : 0),
       incomplete: acc.incomplete + (row.status === "INCOMPLETE" ? 1 : 0),
       absent: acc.absent + (row.status === "ABSENT" ? 1 : 0),
-      sick: acc.sick + (row.status === "SICK" ? 1 : 0),
-      accident: acc.accident + (row.status === "ACCIDENT" ? 1 : 0),
+      sick: acc.sick + (row.status === "SICK" || row.status === "ACCIDENT" ? 1 : 0),
       leave: acc.leave + (row.status === "LEAVE" ? 1 : 0),
       reversed: acc.reversed + (row.status === "ABSENCE_REVERSED" ? 1 : 0),
       repos: acc.repos + (row.status === "REST" ? 1 : 0),
       hours: acc.hours + row.workedHours
     }),
-    { complete: 0, incomplete: 0, absent: 0, sick: 0, leave: 0, accident: 0, reversed: 0, repos: 0, hours: 0 }
+    { complete: 0, incomplete: 0, absent: 0, sick: 0, leave: 0, reversed: 0, repos: 0, hours: 0 }
   );
 
   return (
@@ -250,7 +246,6 @@ function SummaryPunchCalendar({ rows, startDate, endDate }: { rows: SummaryDaily
         <div><span>Absent</span><strong>{totals.absent}</strong></div>
         <div><span>Maladie</span><strong>{totals.sick}</strong></div>
         <div><span>Congé</span><strong>{totals.leave}</strong></div>
-        <div><span>Accident</span><strong>{totals.accident}</strong></div>
         <div><span>Sans preuve</span><strong>{totals.reversed}</strong></div>
         <div><span>Repos</span><strong>{totals.repos}</strong></div>
         <div><span>Heures</span><strong>{totals.hours.toFixed(2)} h</strong></div>

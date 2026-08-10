@@ -10,7 +10,7 @@ export const attendanceStatusMeta: Record<AttendanceSummaryStatus, AttendanceSta
   ABSENT: { label: "Absent", className: "absent" },
   SICK: { label: "Maladie", className: "sick" },
   LEAVE: { label: "Congé", className: "leave" },
-  ACCIDENT: { label: "Accident", className: "accident" },
+  ACCIDENT: { label: "Maladie", className: "sick" },
   COMPENSATED: { label: "Compensé", className: "compensated" },
   ABSENCE_REVERSED: { label: "Sans preuve de pointage", className: "absence-reversed" },
   REST: { label: "Repos", className: "repos" },
@@ -26,4 +26,4 @@ export function attendanceStatusLabel(status?: AttendanceSummaryStatus | null) {
   return attendanceStatusMeta[status || "EMPTY"].label;
 }
 
-export const attendanceStatusLegend: AttendanceSummaryStatus[] = ["PRESENT", "ABSENT", "SICK", "LEAVE", "ACCIDENT", "COMPENSATED", "ABSENCE_REVERSED", "REST", "INCOMPLETE"];
+export const attendanceStatusLegend: AttendanceSummaryStatus[] = ["PRESENT", "ABSENT", "SICK", "LEAVE", "COMPENSATED", "ABSENCE_REVERSED", "REST", "INCOMPLETE"];

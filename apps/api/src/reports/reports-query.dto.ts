@@ -36,11 +36,4 @@ export class ReportsQueryDto {
   @IsEnum(EmployeeStatus)
   status?: EmployeeStatus;
 
-  @IsOptional()
-  @IsString()
-  classificationStatus?: "PENDING" | "CONFIRMED";
-
-  @IsOptional()
-  @IsString()
-  typeCode?: string;
 }

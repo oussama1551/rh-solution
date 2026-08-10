@@ -48,6 +48,10 @@ export class CreateSubUnitDto {
   @IsOptional()
   @IsBoolean()
   isSouthWilaya?: boolean;
+
+  @IsOptional()
+  @IsString()
+  biotimeDepartmentCode?: string | null;
 }
 
 export class UpdateSubUnitDto {
@@ -66,6 +70,10 @@ export class UpdateSubUnitDto {
   @IsOptional()
   @IsBoolean()
   isSouthWilaya?: boolean;
+
+  @IsOptional()
+  @IsString()
+  biotimeDepartmentCode?: string | null;
 }
 
 export class CreateGroupDto {

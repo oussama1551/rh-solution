@@ -2,7 +2,7 @@ import { DataTable } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { PermissionGate } from "../lib/auth";
-import { AbsenceTypeCode, Permission, Shift } from "../lib/types";
+import { BioTimeDepartmentResponse, Permission, Shift } from "../lib/types";
 import { useApi } from "../lib/useApi";
 import { Button } from "../components/Button";
 import { useMemo, useState } from "react";
@@ -48,7 +48,7 @@ type AdministrationOverview = {
   roles: RoleRow[];
   permissions: PermissionRow[];
   modules: AdminModuleRow[];
-  orgUnits: Array<{ id: string; name: string; code: string; subUnits: Array<{ id: string; name: string }> }>;
+  orgUnits: Array<{ id: string; name: string; code: string; subUnits: Array<{ id: string; name: string; biotimeDepartmentCode?: string | null }> }>;
 };
 
 type UserDraft = {
@@ -115,8 +115,7 @@ export function UsersAdminPage() {
     modules: [],
     orgUnits: []
   });
-  const absenceTypes = useApi<AbsenceTypeCode[]>("/api/attendance/absence-types", []);
-  const [tab, setTab] = useState<"users" | "roles" | "permissions" | "modules" | "orgAccess" | "absenceTypes">("users");
+  const [tab, setTab] = useState<"users" | "roles" | "permissions" | "modules" | "orgAccess" | "biotimeMapping">("users");
   const [userDraft, setUserDraft] = useState<UserDraft | null>(null);
   const [orgAccessUserId, setOrgAccessUserId] = useState<string | null>(null);
   const [orgAccessSubUnitIds, setOrgAccessSubUnitIds] = useState<string[]>([]);
@@ -125,6 +124,7 @@ export function UsersAdminPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const departments = useApi<BioTimeDepartmentResponse>("/api/employees/biotime/departments", { departments: [], tree: [] });
   const permissionByCode = useMemo(() => new Map(administration.data.permissions.map(permission => [permission.code, permission])), [administration.data.permissions]);
   const selectedRole = useMemo(() => administration.data.roles.find(role => role.code === roleDraftCode) || null, [administration.data.roles, roleDraftCode]);
   const selectedOrgAccessUser = useMemo(() => administration.data.users.find(user => user.id === orgAccessUserId) || null, [administration.data.users, orgAccessUserId]);
@@ -177,6 +177,24 @@ export function UsersAdminPage() {
       administration.reload();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Erreur lors de l'enregistrement des accès.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveSubUnitBioTimeDepartment(subUnitId: string, biotimeDepartmentCode: string) {
+    setSaving(true);
+    setFormError(null);
+    setNotice(null);
+    try {
+      await api(`/api/org/sub-units/${subUnitId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ biotimeDepartmentCode: biotimeDepartmentCode || null })
+      });
+      setNotice("Correspondance BioTime enregistrée.");
+      administration.reload();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Correspondance BioTime impossible.");
     } finally {
       setSaving(false);
     }
@@ -268,24 +286,6 @@ export function UsersAdminPage() {
     }
   }
 
-  async function updateAbsenceType(row: AbsenceTypeCode, patch: Partial<Pick<AbsenceTypeCode, "label" | "active">>) {
-    setSaving(true);
-    setFormError(null);
-    setNotice(null);
-    try {
-      await api(`/api/attendance/absence-types/${row.code}`, {
-        method: "PATCH",
-        body: JSON.stringify({ label: patch.label ?? row.label, active: patch.active ?? row.active })
-      });
-      setNotice(`Type d'absence ${row.code} enregistré.`);
-      absenceTypes.reload();
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Erreur lors de l'enregistrement du type d'absence.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <>
       <PageHeader title="Administration" actions={<PermissionGate permission="users.manage"><Button variant="primary" onClick={startCreateUser}>Nouvel utilisateur</Button></PermissionGate>} />
@@ -316,7 +316,7 @@ export function UsersAdminPage() {
           <button className={tab === "roles" ? "active" : ""} onClick={() => setTab("roles")}>Rôles</button>
           <button className={tab === "permissions" ? "active" : ""} onClick={() => setTab("permissions")}>Permissions</button>
           <button className={tab === "orgAccess" ? "active" : ""} onClick={() => setTab("orgAccess")}>Accès organigramme</button>
-          <button className={tab === "absenceTypes" ? "active" : ""} onClick={() => setTab("absenceTypes")}>Types absence</button>
+          <button className={tab === "biotimeMapping" ? "active" : ""} onClick={() => setTab("biotimeMapping")}>Départements BioTime</button>
           <button className={tab === "modules" ? "active" : ""} onClick={() => setTab("modules")}>Modules</button>
         </div>
 
@@ -506,36 +506,48 @@ export function UsersAdminPage() {
           />
         )}
 
-        {tab === "absenceTypes" && (
-          <>
-            {absenceTypes.error && <div className="alert alert-error">{absenceTypes.error}</div>}
+        {tab === "biotimeMapping" && (
+          <div className="admin-edit-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Correspondance départements BioTime</h2>
+                <span className="muted">Associez chaque sous-unité RH Solution au département réel attendu par BioTime.</span>
+              </div>
+            </div>
+            {departments.error && <div className="alert alert-error">{departments.error}</div>}
             <DataTable
-              rows={absenceTypes.data}
-              empty="Aucun type d'absence trouvé."
+              rows={administration.data.orgUnits.flatMap(unit => unit.subUnits.map(subUnit => ({ ...subUnit, unitName: unit.name })))}
+              empty="Aucune sous-unité."
               columns={[
-                { key: "code", header: "Code SAP", render: row => <strong>{row.code}</strong>, sortValue: row => row.code },
-                { key: "label", header: "Libellé", render: row => row.label, sortValue: row => row.label },
-                { key: "active", header: "Statut", render: row => <StatusBadge value={row.active ? "ACTIVE" : "RESIGNED"} label={row.active ? "Actif" : "Inactif"} /> },
-                { key: "actions", header: "Actions", render: row => (
-                  <PermissionGate permission="users.manage">
-                    <div className="row-actions">
-                      <Button variant="ghost" disabled={saving} onClick={() => {
-                        const label = window.prompt("Libellé du type d'absence", row.label);
-                        if (label?.trim()) void updateAbsenceType(row, { label: label.trim() });
-                      }}>Modifier</Button>
-                      <Button variant="ghost" disabled={saving} onClick={() => updateAbsenceType(row, { active: !row.active })}>
-                        {row.active ? "Désactiver" : "Activer"}
-                      </Button>
-                    </div>
-                  </PermissionGate>
+                { key: "unit", header: "Unité", render: row => row.unitName, sortValue: row => row.unitName },
+                { key: "subUnit", header: "Sous-unité", render: row => row.name, sortValue: row => row.name },
+                { key: "bio", header: "Département BioTime", render: row => (
+                  <select
+                    value={row.biotimeDepartmentCode || ""}
+                    disabled={saving || departments.loading}
+                    onChange={event => saveSubUnitBioTimeDepartment(row.id, event.target.value)}
+                  >
+                    <option value="">Non associé</option>
+                    {flatDepartmentOptions(departments.data.tree).map(option => (
+                      <option key={option.code} value={option.code}>{option.label}</option>
+                    ))}
+                  </select>
                 ) }
               ]}
             />
-          </>
+          </div>
         )}
+
       </section>
     </>
   );
+}
+
+function flatDepartmentOptions(nodes: BioTimeDepartmentResponse["tree"], depth = 0): Array<{ code: string; label: string }> {
+  return nodes.flatMap(node => [
+    { code: node.code, label: `${"  ".repeat(depth)}${node.name} (${node.code})` },
+    ...flatDepartmentOptions(node.children || [], depth + 1)
+  ]);
 }
 
 export function NotFoundPage() {

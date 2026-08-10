@@ -10,8 +10,6 @@ export type ReportFilters = {
   unitId?: string;
   search?: string;
   status?: EmployeeStatus;
-  classificationStatus?: "PENDING" | "CONFIRMED";
-  typeCode?: string;
 };
 
 export type MonthlyEmployeeReport = {
@@ -167,7 +165,6 @@ export type SummaryReportRow = {
   absentDays: number;
   sickDays: number;
   leaveDays: number;
-  accidentDays: number;
   compensatedDays: number;
   absenceReversedDays: number;
   restDays: number;
@@ -184,7 +181,6 @@ export type SummaryDailyRecordRow = {
   id: string;
   workDate: string;
   status: "PRESENT" | "ABSENT" | "SICK" | "LEAVE" | "ACCIDENT" | "COMPENSATED" | "ABSENCE_REVERSED" | "REST" | "INCOMPLETE";
-  absenceTypeCode: string | null;
   workedHours: number;
   overtimeHours: number;
   overtimeHoursRate50: number;
@@ -194,41 +190,4 @@ export type SummaryDailyRecordRow = {
   leaveType: string | null;
   exceptionalReason: string | null;
   generatedAt: Date;
-};
-
-export type AbsenceRecapRow = {
-  id: string;
-  date: string;
-  classificationStatus: "PENDING" | "CONFIRMED";
-  employee: SummaryReportRow["employee"];
-  type: {
-    code: string;
-    label: string;
-  } | null;
-  declaration: {
-    id: string;
-    status: string;
-    note: string | null;
-    declaredBy: { id: string; username: string; fullName: string | null } | null;
-    approvedBy: { id: string; username: string; fullName: string | null } | null;
-    approvedAt: Date | null;
-  } | null;
-};
-
-export type AbsenceRecapReport = {
-  period: {
-    startDate: string;
-    endDate: string;
-  };
-  totals: {
-    absences: number;
-    pending: number;
-    confirmed: number;
-  };
-  byType: Array<{
-    code: string;
-    label: string;
-    days: number;
-  }>;
-  rows: AbsenceRecapRow[];
 };

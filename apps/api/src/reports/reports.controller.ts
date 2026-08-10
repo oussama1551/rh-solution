@@ -66,12 +66,6 @@ export class ReportsController {
     return this.summary.dailyRecords(query, actor);
   }
 
-  @Get("absences/recap")
-  @Permissions(PermissionCode.ReportsRead)
-  absenceRecap(@Query() query: ReportsQueryDto, @CurrentUser() actor: RequestUser) {
-    return this.summary.absenceRecap(query, actor);
-  }
-
   @Get("summary/generate")
   @Permissions(PermissionCode.ReportsRead)
   generateSummary(@Query() query: ReportsQueryDto, @CurrentUser() actor: RequestUser) {
@@ -130,22 +124,6 @@ export class ReportsController {
     const rows = await this.summary.report(query, actor);
     const buffer = await this.exports.summaryPdf(rows);
     this.sendFile(response, buffer, "application/pdf", "rapport-synthese.pdf");
-  }
-
-  @Get("absences/recap/export/excel")
-  @Permissions(PermissionCode.ReportsExport)
-  async absenceRecapExcel(@Query() query: ReportsQueryDto, @CurrentUser() actor: RequestUser, @Res() response: Response) {
-    const report = await this.summary.absenceRecap(query, actor);
-    const buffer = await this.exports.absenceRecapExcel(report.rows);
-    this.sendFile(response, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "recap-absences.xlsx");
-  }
-
-  @Get("absences/recap/export/pdf")
-  @Permissions(PermissionCode.ReportsExport)
-  async absenceRecapPdf(@Query() query: ReportsQueryDto, @CurrentUser() actor: RequestUser, @Res() response: Response) {
-    const report = await this.summary.absenceRecap(query, actor);
-    const buffer = await this.exports.absenceRecapPdf(report.rows);
-    this.sendFile(response, buffer, "application/pdf", "recap-absences.pdf");
   }
 
   private sendFile(response: Response, buffer: Buffer, contentType: string, filename: string) {

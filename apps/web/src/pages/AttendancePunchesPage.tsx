@@ -1,16 +1,13 @@
-import { CalendarDays, Printer, Search, X } from "lucide-react";
+import { CalendarDays, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { DataTable } from "../components/DataTable";
+import { EmployeeMonthlyCalendarModal } from "../components/EmployeeMonthlyCalendarModal";
 import { FilterField, FiltersBar } from "../components/FiltersBar";
-import { AttendanceStatusBadge } from "../components/AttendanceStatusBadge";
-import { AttendanceStatusLegend } from "../components/AttendanceStatusLegend";
-import { LoadingState } from "../components/LoadingState";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
-import { attendanceStatusClass } from "../lib/attendanceStatus";
 import { shiftLabels, timingLabels } from "../lib/shiftLabels";
-import { AttendanceDailyRow, AttendanceMonthlyCalendar, AttendanceTiming, OrgUnit } from "../lib/types";
+import { AttendanceDailyRow, AttendanceTiming, OrgUnit } from "../lib/types";
 import { useApi, useSessionFilters } from "../lib/useApi";
 
 function currentMonth() {
@@ -89,16 +86,6 @@ function periodLabel(month: string) {
   return `${formatDate(period.from)} - ${formatDate(period.to)}`;
 }
 
-function printEmployeeCalendar() {
-  document.body.dataset.printMode = "employee-calendar";
-  const cleanup = () => {
-    delete document.body.dataset.printMode;
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  window.setTimeout(() => window.print(), 50);
-}
-
 export function AttendancePunchesPage() {
   const { filters, update, reset } = useSessionFilters("attendance.daily.filters", {
     search: "",
@@ -117,8 +104,6 @@ export function AttendancePunchesPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<{ id: string; name: string } | null>(null);
   const orgTree = useApi<OrgUnit[]>("/api/org/tree", []);
   const rows = useApi<AttendanceDailyRow[]>(buildQuery(filters), []);
-  const calendarPath = selectedEmployee ? `/api/attendance/employees/${selectedEmployee.id}/monthly-calendar?month=${filters.month || currentMonth()}` : null;
-  const calendar = useApi<AttendanceMonthlyCalendar | null>(calendarPath, null);
 
   const totals = useMemo(() => ({
     days: rows.data.length,
@@ -249,98 +234,7 @@ export function AttendancePunchesPage() {
           ]}
         />
       </section>
-      {selectedEmployee && (
-        <div className="modal-backdrop">
-          <div className="calendar-modal employee-calendar-print">
-            <div className="modal-header">
-              <div>
-                <span>Calendrier mensuel</span>
-                <strong>{selectedEmployee.name}</strong>
-              </div>
-              <div className="row-actions no-print">
-                <Button variant="secondary" onClick={printEmployeeCalendar}><Printer size={16} /> Imprimer</Button>
-                <button className="icon-button" onClick={() => setSelectedEmployee(null)} title="Fermer"><X size={18} /></button>
-              </div>
-            </div>
-            {calendar.loading && <LoadingState label="Chargement du calendrier mensuel..." />}
-            {calendar.data && <AttendanceCalendar data={calendar.data} />}
-          </div>
-        </div>
-      )}
+      <EmployeeMonthlyCalendarModal employee={selectedEmployee} month={filters.month || currentMonth()} onClose={() => setSelectedEmployee(null)} />
     </>
   );
-}
-
-function AttendanceCalendar({ data }: { data: AttendanceMonthlyCalendar }) {
-  const byDate = new Map(data.days.map(day => [day.workDate, day]));
-  const days = data.period?.days || periodDays(payrollPeriod(data.month).from, payrollPeriod(data.month).to);
-  const cells = buildPeriodCells(days);
-
-  return (
-    <>
-      <div className="attendance-summary-strip compact">
-        <div><span>Jours</span><strong>{data.totals.workedDays}</strong></div>
-        <div><span>Heures</span><strong>{hoursLabel(data.totals.totalHours)}</strong></div>
-        <div><span>Heures sup.</span><strong>{hoursLabel(data.totals.overtimeHours || 0)}</strong></div>
-        <div><span>{shiftLabels.MORNING}</span><strong>{data.totals.morningDays}</strong></div>
-        <div><span>{shiftLabels.EVENING}</span><strong>{data.totals.eveningDays}</strong></div>
-        <div><span>{shiftLabels.NIGHT}</span><strong>{data.totals.nightDays}</strong></div>
-        <div><span>{shiftLabels.FLEXIBLE}</span><strong>{data.totals.normalDays}</strong></div>
-      </div>
-      {!data.summaryAvailable && <div className="alert">Synthèse non générée pour cette période: le calendrier affiche seulement les jours avec pointages.</div>}
-      <AttendanceStatusLegend />
-      <div className="attendance-calendar">
-        {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(day => <div className="calendar-head" key={day}>{day}</div>)}
-        {cells.map(cell => {
-          const day = cell.date ? byDate.get(cell.date) : null;
-          const status = day?.summaryStatus || null;
-          return (
-            <div key={cell.key} className={`calendar-day ${day ? `calendar-${day.timing.toLowerCase()}` : ""} ${status ? `report-status-${attendanceStatusClass(status)}` : ""}`}>
-              {cell.date && <><strong>{cell.day}</strong><small>{cell.month}</small></>}
-              {day && (
-                <>
-                  <AttendanceStatusBadge status={status || (day.isIncomplete ? "INCOMPLETE" : "PRESENT")} />
-                  <span>{timingLabels[day.timing]}</span>
-                  <small>{day.assignmentSource === "assigned" ? "Assigné" : day.assignmentSource === "summary" ? "Synthèse paie" : "Déduit"}</small>
-                  <small>{formatTime(day.firstPunchTime)} - {formatTime(day.lastPunchTime)}</small>
-                  <small>{day.isIncomplete ? "Incomplet" : hoursLabel(day.workedHours)}</small>
-                  {(day.overtimeHours || 0) > 0 && <small className="overtime-calendar-line">Sup: {hoursLabel(day.overtimeHours || 0)}</small>}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-function periodDays(from: string, to: string) {
-  const days: string[] = [];
-  const cursor = new Date(`${from}T00:00:00`);
-  const end = new Date(`${to}T00:00:00`);
-  while (cursor <= end) {
-    days.push(dateKey(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return days;
-}
-
-function buildPeriodCells(days: string[]) {
-  if (!days.length) return [];
-  const first = new Date(`${days[0]}T00:00:00`);
-  const leading = (first.getDay() + 6) % 7;
-  const formatter = new Intl.DateTimeFormat("fr-FR", { month: "short" });
-  return [
-    ...Array.from({ length: leading }, (_, index) => ({ key: `empty-${index}`, date: null as string | null, day: "", month: "" })),
-    ...days.map(date => {
-      const parsed = new Date(`${date}T00:00:00`);
-      return {
-        key: date,
-        date,
-        day: String(parsed.getDate()).padStart(2, "0"),
-        month: formatter.format(parsed)
-      };
-    })
-  ];
 }
