@@ -110,7 +110,7 @@ export function AttendancePunchesPage() {
     hours: rows.data.reduce((sum, row) => sum + row.workedHours, 0),
     night: rows.data.filter(row => row.timing === "NIGHT").length,
     incomplete: rows.data.filter(row => row.isIncomplete).length,
-    morning: rows.data.filter(row => row.shiftType === "MORNING").length,
+    morning: rows.data.filter(row => row.shiftType === "MORNING" || row.shiftType === "SEC_MORNING").length,
     evening: rows.data.filter(row => row.shiftType === "EVENING").length,
     flexible: rows.data.filter(row => row.shiftType === "FLEXIBLE").length
   }), [rows.data]);
@@ -161,6 +161,8 @@ export function AttendancePunchesPage() {
               <option value="EVENING">{shiftLabels.EVENING}</option>
               <option value="NIGHT">{shiftLabels.NIGHT}</option>
               <option value="FLEXIBLE">{shiftLabels.FLEXIBLE}</option>
+              <option value="SEC_MORNING">{shiftLabels.SEC_MORNING}</option>
+              <option value="SEC_NIGHT">{shiftLabels.SEC_NIGHT}</option>
             </select>
           </FilterField>
           <FilterField label="Unité">

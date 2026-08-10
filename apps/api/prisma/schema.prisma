@@ -246,6 +246,8 @@ enum ShiftType {
   NIGHT
   FLEXIBLE
   REPOS
+  SEC_MORNING
+  SEC_NIGHT
 
   @@map("shift_type")
 }

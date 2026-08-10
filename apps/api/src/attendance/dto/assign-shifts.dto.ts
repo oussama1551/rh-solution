@@ -11,8 +11,8 @@ export class AssignShiftsDto {
   groupId?: string;
 
   @IsString()
-  @IsIn(["MORNING", "EVENING", "NIGHT", "FLEXIBLE", "REPOS"])
-  shiftType: "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS";
+  @IsIn(["MORNING", "EVENING", "NIGHT", "FLEXIBLE", "REPOS", "SEC_MORNING", "SEC_NIGHT"])
+  shiftType: "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS" | "SEC_MORNING" | "SEC_NIGHT";
 
   @IsDateString()
   from: string;

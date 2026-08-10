@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Save, Trash2, Undo2 } from "lucide-react";
 import { DragEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { shiftLabels } from "../lib/shiftLabels";
 import { ApprovalStatus, ShiftPlanningState, ShiftType } from "../lib/types";
 import { useApi } from "../lib/useApi";
@@ -20,7 +21,13 @@ const palette: Array<{ type: ShiftType | "CLEAR"; label: string }> = [
   { type: "CLEAR", label: "Effacer" }
 ];
 
+const securityPalette: Array<{ type: ShiftType; label: string }> = [
+  { type: "SEC_MORNING", label: shiftLabels.SEC_MORNING },
+  { type: "SEC_NIGHT", label: shiftLabels.SEC_NIGHT }
+];
+
 export function ShiftAssignmentCalendar({ target, title, onSaved, readOnly = false }: { target: Target; title?: string; onSaved?: () => void; readOnly?: boolean }) {
+  const { user } = useAuth();
   const [period, setPeriod] = useState("");
   const [draft, setDraft] = useState<Record<string, DraftValue>>({});
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
@@ -31,6 +38,18 @@ export function ShiftAssignmentCalendar({ target, title, onSaved, readOnly = fal
   const [saving, setSaving] = useState(false);
   const queryTarget = "employeeId" in target ? `employeeId=${target.employeeId}` : `groupId=${target.groupId}`;
   const state = useApi<ShiftPlanningState>(`/api/attendance/shift-planning?${queryTarget}${period ? `&period=${period}` : ""}`, null as never);
+  const canUseSecurityShifts = useMemo(() => {
+    const identity = `${user?.username || ""} ${user?.fullName || ""}`.toLowerCase();
+    const isAdmin = user?.roles?.some(role => role.toLowerCase() === "admin");
+    const isSecurityResponsible = identity.includes("securite") || identity.includes("sécurité") || identity.includes("security");
+    return Boolean(isAdmin || isSecurityResponsible);
+  }, [user]);
+  const visiblePalette = useMemo(
+    () => canUseSecurityShifts
+      ? [...palette.slice(0, -1), ...securityPalette, palette[palette.length - 1]]
+      : palette,
+    [canUseSecurityShifts]
+  );
 
   const originalByDate = useMemo(() => {
     const map = new Map<string, OriginalValue>();
@@ -223,7 +242,7 @@ export function ShiftAssignmentCalendar({ target, title, onSaved, readOnly = fal
         <div className="alert alert-info">Lecture seule: vous pouvez consulter et imprimer ce planning, mais pas le modifier.</div>
       ) : (
         <div className="shift-palette" aria-label="Palette des shifts">
-          {palette.map(item => (
+          {visiblePalette.map(item => (
             <button
               key={item.type}
               draggable

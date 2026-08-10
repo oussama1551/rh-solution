@@ -1070,6 +1070,14 @@ select {
   background: #eef2ff;
 }
 
+.calendar-sec_morning {
+  background: #ecfeff;
+}
+
+.calendar-sec_night {
+  background: #f5f3ff;
+}
+
 .calendar-normal {
   background: #f0fdf4;
 }
@@ -1351,6 +1359,20 @@ select {
   color: #3730a3;
   background: #e0e7ff;
   border-color: #c7d2fe;
+}
+
+.shift-token-sec_morning,
+.shift-badge-sec_morning {
+  color: #0e7490;
+  background: #cffafe;
+  border-color: #a5f3fc;
+}
+
+.shift-token-sec_night,
+.shift-badge-sec_night {
+  color: #6d28d9;
+  background: #ede9fe;
+  border-color: #ddd6fe;
 }
 
 .shift-token-flexible,
@@ -2355,4 +2377,378 @@ select {
     break-inside: avoid;
     min-height: 118px !important;
   }
+}
+
+body[data-density="compact"] {
+  font-size: 12.5px;
+}
+
+body[data-density="mini"] {
+  font-size: 11.5px;
+}
+
+body[data-density="large"] {
+  font-size: 15px;
+}
+
+body[data-density="compact"] .app-shell {
+  grid-template-columns: 238px 1fr;
+}
+
+body[data-density="mini"] .app-shell {
+  grid-template-columns: 218px 1fr;
+}
+
+body[data-density="large"] .app-shell {
+  grid-template-columns: 300px 1fr;
+}
+
+body[data-density="compact"] .sidebar {
+  padding: 14px 12px;
+}
+
+body[data-density="mini"] .sidebar {
+  padding: 12px 10px;
+}
+
+body[data-density="large"] .sidebar {
+  padding: 20px 18px;
+}
+
+body[data-density="compact"] .topbar {
+  height: 54px;
+  padding: 0 22px;
+}
+
+body[data-density="mini"] .topbar {
+  height: 48px;
+  padding: 0 18px;
+}
+
+body[data-density="large"] .topbar {
+  height: 70px;
+  padding: 0 32px;
+}
+
+body[data-density="compact"] .content {
+  padding: 22px;
+  max-width: 1760px;
+}
+
+body[data-density="mini"] .content {
+  padding: 18px;
+  max-width: 1840px;
+}
+
+body[data-density="large"] .content {
+  padding: 32px;
+}
+
+body[data-density="compact"] .nav-link {
+  height: 34px;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+}
+
+body[data-density="mini"] .nav-link {
+  height: 31px;
+  gap: 7px;
+  margin-bottom: 3px;
+  padding: 0 9px;
+}
+
+body[data-density="large"] .nav-link {
+  height: 46px;
+}
+
+body[data-density="compact"] .sync-card {
+  margin: 16px 0;
+  padding: 10px;
+}
+
+body[data-density="mini"] .sync-card {
+  margin: 12px 0;
+  padding: 9px;
+}
+
+body[data-density="compact"] h1 {
+  font-size: 26px;
+}
+
+body[data-density="mini"] h1 {
+  font-size: 23px;
+}
+
+body[data-density="large"] h1 {
+  font-size: 34px;
+}
+
+body[data-density="compact"] h2 {
+  font-size: 16px;
+}
+
+body[data-density="mini"] h2 {
+  font-size: 15px;
+}
+
+body[data-density="compact"] .page-header {
+  margin-bottom: 18px;
+}
+
+body[data-density="mini"] .page-header {
+  margin-bottom: 14px;
+}
+
+body[data-density="compact"] .panel {
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+body[data-density="mini"] .panel {
+  padding: 13px;
+  margin-bottom: 12px;
+}
+
+body[data-density="large"] .panel {
+  padding: 24px;
+}
+
+body[data-density="compact"] .filters-bar {
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+body[data-density="mini"] .filters-bar {
+  gap: 8px;
+  margin-bottom: 11px;
+}
+
+body[data-density="compact"] input,
+body[data-density="compact"] select {
+  height: 34px;
+  border-radius: 7px;
+  padding: 0 10px;
+}
+
+body[data-density="mini"] input,
+body[data-density="mini"] select {
+  height: 30px;
+  border-radius: 7px;
+  padding: 0 9px;
+}
+
+body[data-density="compact"] .input-icon input {
+  padding-left: 32px;
+}
+
+body[data-density="mini"] .input-icon input {
+  padding-left: 30px;
+}
+
+body[data-density="mini"] .input-icon svg {
+  left: 10px;
+}
+
+body[data-density="large"] input,
+body[data-density="large"] select {
+  height: 46px;
+}
+
+body[data-density="compact"] .btn {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 7px;
+}
+
+body[data-density="mini"] .btn {
+  min-height: 29px;
+  padding: 0 9px;
+  border-radius: 7px;
+  gap: 6px;
+}
+
+body[data-density="large"] .btn {
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+body[data-density="compact"] .icon-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+body[data-density="mini"] .icon-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+body[data-density="compact"] .attendance-summary-strip {
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+body[data-density="mini"] .attendance-summary-strip {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+body[data-density="compact"] .attendance-summary-strip div,
+body[data-density="compact"] .unit-stat-grid div,
+body[data-density="compact"] .detail-grid div {
+  padding: 9px;
+}
+
+body[data-density="mini"] .attendance-summary-strip div,
+body[data-density="mini"] .unit-stat-grid div,
+body[data-density="mini"] .detail-grid div {
+  padding: 8px;
+}
+
+body[data-density="compact"] .attendance-summary-strip strong,
+body[data-density="compact"] .admin-summary-grid strong {
+  font-size: 16px;
+}
+
+body[data-density="mini"] .attendance-summary-strip strong,
+body[data-density="mini"] .admin-summary-grid strong {
+  font-size: 15px;
+}
+
+body[data-density="compact"] .data-table {
+  font-size: 12px;
+}
+
+body[data-density="mini"] .data-table {
+  font-size: 11.2px;
+}
+
+body[data-density="compact"] .data-table th {
+  height: 34px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+body[data-density="mini"] .data-table th {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 9.5px;
+}
+
+body[data-density="compact"] .data-table td {
+  height: 40px;
+  padding: 6px 9px;
+}
+
+body[data-density="mini"] .data-table td {
+  height: 35px;
+  padding: 5px 8px;
+}
+
+body[data-density="large"] .data-table th {
+  height: 48px;
+}
+
+body[data-density="large"] .data-table td {
+  height: 56px;
+}
+
+body[data-density="compact"] .table-footer {
+  min-height: 42px;
+}
+
+body[data-density="mini"] .table-footer {
+  min-height: 38px;
+}
+
+body[data-density="compact"] .badge {
+  min-height: 20px;
+  height: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+body[data-density="mini"] .badge {
+  min-height: 18px;
+  height: auto;
+  padding: 1px 7px;
+  font-size: 9.5px;
+}
+
+body[data-density="compact"] .table-main-cell {
+  gap: 2px;
+}
+
+body[data-density="mini"] .table-main-cell {
+  gap: 1px;
+}
+
+body[data-density="compact"] .table-main-cell strong {
+  font-size: 12px;
+}
+
+body[data-density="mini"] .table-main-cell strong {
+  font-size: 11.3px;
+}
+
+body[data-density="compact"] .table-main-cell span,
+body[data-density="compact"] .muted,
+body[data-density="compact"] .filter-field,
+body[data-density="compact"] .login-card label {
+  font-size: 11px;
+}
+
+body[data-density="mini"] .table-main-cell span,
+body[data-density="mini"] .muted,
+body[data-density="mini"] .filter-field,
+body[data-density="mini"] .login-card label {
+  font-size: 10.2px;
+}
+
+body[data-density="compact"] .row-actions,
+body[data-density="compact"] .page-actions,
+body[data-density="compact"] .export-buttons,
+body[data-density="compact"] .pagination,
+body[data-density="compact"] .server-state,
+body[data-density="compact"] .user-menu {
+  gap: 8px;
+}
+
+body[data-density="mini"] .row-actions,
+body[data-density="mini"] .page-actions,
+body[data-density="mini"] .export-buttons,
+body[data-density="mini"] .pagination,
+body[data-density="mini"] .server-state,
+body[data-density="mini"] .user-menu {
+  gap: 6px;
+}
+
+.density-control {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.density-control span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.density-control select {
+  height: 32px;
+  min-width: 98px;
+  padding: 0 8px;
+}
+
+body[data-density="compact"] .density-control select {
+  height: 30px;
+  min-width: 90px;
+}
+
+body[data-density="mini"] .density-control select {
+  height: 28px;
+  min-width: 78px;
 }

@@ -16,7 +16,7 @@ import {
   RefreshCw,
   Users
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { NotificationMenuCounts, Permission, SyncState } from "../lib/types";
@@ -49,6 +49,7 @@ const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard;
 
 export function AppShell() {
   const { user, logout, can } = useAuth();
+  const [density, setDensity] = useState(() => localStorage.getItem("rh.uiDensity") || "compact");
   const sync = useApi<SyncState>("/api/sync/state", { connected: false, lastSuccessAt: null, lastAttemptAt: null, running: false, lastError: null });
   const counts = useApi<NotificationMenuCounts>("/api/notifications/menu-counts", { notifications: 0, validation: 0, messages: 0 });
   const visibleNav = navItems.filter(item => can(item.permission) && (!item.roles || item.roles.some(role => user?.roles.includes(role))));
@@ -62,6 +63,11 @@ export function AppShell() {
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    document.body.dataset.density = density;
+    localStorage.setItem("rh.uiDensity", density);
+  }, [density]);
 
   return (
     <div className="app-shell">
@@ -101,6 +107,15 @@ export function AppShell() {
             {sync.data.running ? "Sync BioTime en cours" : sync.data.connected ? "BioTime synchronisé" : "BioTime à synchroniser"}
           </div>
           <div className="user-menu">
+            <label className="density-control" title="Taille d'affichage">
+              <span>Affichage</span>
+              <select value={density} onChange={event => setDensity(event.target.value)}>
+                <option value="mini">Mini</option>
+                <option value="compact">Compact</option>
+                <option value="normal">Normal</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
             <NotificationsBell counts={counts.data} onChanged={counts.reload} />
             <div>
               <strong>{user?.fullName || user?.username}</strong>

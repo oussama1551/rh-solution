@@ -19,7 +19,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     api<{ user: User }>("/api/auth/me", { method: "POST" })
       .then(result => setUser(result.user))
-      .catch(() => setUser(null))
+      .catch(async () => {
+        setUser(null);
+        await api("/api/auth/clear-session", { method: "POST" }).catch(() => null);
+      })
       .finally(() => setLoading(false));
   }, []);
 

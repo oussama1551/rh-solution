@@ -428,7 +428,7 @@ export type PresumedAbsence = {
 };
 
 export type AttendanceTiming = "MORNING" | "EVENING" | "NIGHT" | "NORMAL";
-export type ShiftType = "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS";
+export type ShiftType = "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS" | "SEC_MORNING" | "SEC_NIGHT";
 export type ApprovalStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 export type OvertimeRateType = "RATE_50" | "RATE_75" | "RATE_100";
 export type AttendanceSummaryStatus = "PRESENT" | "ABSENT" | "SICK" | "LEAVE" | "ACCIDENT" | "COMPENSATED" | "ABSENCE_REVERSED" | "REST" | "INCOMPLETE" | "EMPTY";

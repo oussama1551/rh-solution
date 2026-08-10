@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { Button } from "../components/Button";
+import { ApiError } from "../lib/api";
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -18,8 +19,14 @@ export function LoginPage() {
     setError(null);
     try {
       await login(username, password);
-    } catch {
-      setError("Identifiants incorrects ou serveur indisponible.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError("Identifiants incorrects.");
+      } else if (err instanceof ApiError) {
+        setError(`Serveur indisponible ou erreur API (${err.status}).`);
+      } else {
+        setError("Serveur indisponible. Vérifiez que l'API est démarrée.");
+      }
     } finally {
       setLoading(false);
     }

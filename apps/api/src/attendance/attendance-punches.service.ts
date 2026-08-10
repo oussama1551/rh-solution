@@ -292,9 +292,9 @@ export class AttendancePunchesService {
         workedDays: days.filter(day => day.firstPunchTime && day.lastPunchTime).length,
         totalHours: roundHours(days.reduce((sum, day) => sum + day.workedHours, 0)),
         overtimeHours: roundHours(days.reduce((sum, day) => sum + (day.overtimeHours || 0), 0)),
-        morningDays: days.filter(day => day.shiftType === "MORNING").length,
+        morningDays: days.filter(day => day.shiftType === "MORNING" || day.shiftType === "SEC_MORNING").length,
         eveningDays: days.filter(day => day.shiftType === "EVENING").length,
-        nightDays: days.filter(day => day.shiftType === "NIGHT").length,
+        nightDays: days.filter(day => day.shiftType === "NIGHT" || day.shiftType === "SEC_NIGHT").length,
         normalDays: days.filter(day => day.shiftType === "FLEXIBLE").length,
         incompleteDays: days.filter(day => day.isIncomplete).length
       }
@@ -405,7 +405,7 @@ export class AttendancePunchesService {
         lastPunchId: exitRaw ? (exitRaw.biotimeId || exitRaw.zktecoPunchId || exitRaw.id) : null,
         punchCount: result.punchCount,
         workedHours: result.workedHours,
-        timing: result.shiftType === "FLEXIBLE" ? "NORMAL" : result.shiftType,
+        timing: timingFromShiftType(result.shiftType),
         shiftType: result.shiftType,
         shiftLabel: result.shiftLabel,
         assignmentSource: result.source,
@@ -715,7 +715,7 @@ function syntheticCalendarDay(record: {
     overtimeHoursRate50: Number(record.overtimeHoursRate50 || 0),
     overtimeHoursRate75: Number(record.overtimeHoursRate75 || 0),
     overtimeHoursRate100: Number(record.overtimeHoursRate100 || 0),
-    timing: shiftType === "REPOS" ? "NORMAL" : shiftType === "MORNING" || shiftType === "EVENING" || shiftType === "NIGHT" ? shiftType : "NORMAL",
+    timing: timingFromShiftType(shiftType),
     shiftType,
     shiftLabel: summaryStatusCalendarLabel(record.status),
     assignmentSource: "summary",
@@ -773,6 +773,13 @@ function calendarDayWithDeclarations(day: any, liveDeclaration: { status: Attend
 function canReviewDeclarationPunches(actor?: RequestUser) {
   const roles = new Set(actor?.roles || []);
   return roles.has("ADMIN") || roles.has("DRH") || roles.has("GRH");
+}
+
+function timingFromShiftType(shiftType: string | null | undefined) {
+  if (shiftType === "MORNING" || shiftType === "SEC_MORNING") return "MORNING";
+  if (shiftType === "EVENING") return "EVENING";
+  if (shiftType === "NIGHT" || shiftType === "SEC_NIGHT") return "NIGHT";
+  return "NORMAL";
 }
 
 function syntheticCalendarDayFromStatus(employeeId: string, workDate: string, status: AttendanceSummaryStatus, label: string, employee: any) {

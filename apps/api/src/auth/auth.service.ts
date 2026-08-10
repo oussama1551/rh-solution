@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { createHash } from "crypto";
@@ -15,6 +15,8 @@ type LoginContext = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -24,73 +26,80 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, context: LoginContext = {}) {
-    const user = await this.prisma.user.findUnique({
-      where: { username: dto.username },
-      include: {
-        roles: {
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: { permission: true }
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { username: dto.username },
+        include: {
+          roles: {
+            include: {
+              role: {
+                include: {
+                  permissions: {
+                    include: { permission: true }
+                  }
                 }
               }
             }
           }
         }
-      }
-    });
+      });
 
-    if (!user || !user.isActive || !(await this.passwords.verify(user.passwordHash, dto.password))) {
+      if (!user || !user.isActive || !(await this.passwords.verify(user.passwordHash, dto.password))) {
+        await this.audit.record({
+          action: "auth.login_failed",
+          entityType: "user",
+          metadata: { username: dto.username },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent
+        });
+        throw new UnauthorizedException("Identifiants invalides.");
+      }
+
+      const expiresAt = this.computeExpiry();
+      const session = await this.prisma.session.create({
+        data: {
+          userId: user.id,
+          tokenHash: "pending",
+          expiresAt
+        }
+      });
+
+      const token = await this.jwt.signAsync({
+        sub: user.id,
+        username: user.username,
+        sid: session.id
+      });
+
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: { tokenHash: this.hashToken(token) }
+      });
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() }
+      });
+
       await this.audit.record({
-        action: "auth.login_failed",
+        userId: user.id,
+        action: "auth.login",
         entityType: "user",
-        metadata: { username: dto.username },
+        entityId: user.id,
         ipAddress: context.ipAddress,
         userAgent: context.userAgent
       });
-      throw new UnauthorizedException("Identifiants invalides.");
-    }
 
-    const expiresAt = this.computeExpiry();
-    const session = await this.prisma.session.create({
-      data: {
-        userId: user.id,
-        tokenHash: "pending",
+      return {
+        accessToken: token,
+        user: this.toRequestUser(user, session.id),
         expiresAt
+      };
+    } catch (error) {
+      if (!(error instanceof UnauthorizedException)) {
+        this.logger.error(`Login failed unexpectedly for ${dto.username}: ${error instanceof Error ? error.message : String(error)}`);
       }
-    });
-
-    const token = await this.jwt.signAsync({
-      sub: user.id,
-      username: user.username,
-      sid: session.id
-    });
-
-    await this.prisma.session.update({
-      where: { id: session.id },
-      data: { tokenHash: this.hashToken(token) }
-    });
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() }
-    });
-
-    await this.audit.record({
-      userId: user.id,
-      action: "auth.login",
-      entityType: "user",
-      entityId: user.id,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent
-    });
-
-    return {
-      accessToken: token,
-      user: this.toRequestUser(user, session.id),
-      expiresAt
-    };
+      throw error;
+    }
   }
 
   async logout(user: RequestUser | undefined, token: string | undefined) {

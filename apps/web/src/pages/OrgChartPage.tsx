@@ -471,6 +471,8 @@ function shiftPrintLabel(type: string | null) {
   if (type === "MORNING") return "صباحا";
   if (type === "EVENING") return "مساءا";
   if (type === "NIGHT") return "ليلا";
+  if (type === "SEC_MORNING") return "أمن صباحا";
+  if (type === "SEC_NIGHT") return "أمن ليلا";
   if (type === "REPOS") return "راحة";
   if (type === "FLEXIBLE") return "عادي";
   return "";

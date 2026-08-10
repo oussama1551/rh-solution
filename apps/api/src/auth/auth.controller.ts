@@ -18,15 +18,17 @@ export class AuthController {
   @Public()
   @Post("login")
   async login(@Body() dto: LoginDto, @Req() req: RequestWithUser, @Res({ passthrough: true }) res: Response) {
+    this.clearSessionCookie(res);
     const result = await this.auth.login(dto, {
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"]
     });
 
-    res.cookie(this.config.get<string>("SESSION_COOKIE_NAME", "rh_session"), result.accessToken, {
+    res.cookie(this.cookieName(), result.accessToken, {
       httpOnly: true,
       sameSite: "lax",
       secure: false,
+      path: "/",
       expires: result.expiresAt
     });
 
@@ -37,12 +39,32 @@ export class AuthController {
   async logout(@CurrentUser() user: RequestUser, @Req() req: RequestWithUser, @Res({ passthrough: true }) res: Response) {
     const token = this.auth.extractTokenFromRequest(req);
     const result = await this.auth.logout(user, token);
-    res.clearCookie(this.config.get<string>("SESSION_COOKIE_NAME", "rh_session"));
+    this.clearSessionCookie(res);
     return result;
+  }
+
+  @Public()
+  @Post("clear-session")
+  clearSession(@Res({ passthrough: true }) res: Response) {
+    this.clearSessionCookie(res);
+    return { ok: true };
   }
 
   @Post("me")
   me(@CurrentUser() user: RequestUser) {
     return { user };
+  }
+
+  private cookieName() {
+    return this.config.get<string>("SESSION_COOKIE_NAME", "rh_session");
+  }
+
+  private clearSessionCookie(res: Response) {
+    res.clearCookie(this.cookieName(), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+      path: "/"
+    });
   }
 }

@@ -6,8 +6,8 @@ export class BatchShiftEntryDto {
   date: string;
 
   @IsOptional()
-  @IsIn(["MORNING", "EVENING", "NIGHT", "FLEXIBLE", "REPOS", null])
-  shiftType: "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS" | null;
+  @IsIn(["MORNING", "EVENING", "NIGHT", "FLEXIBLE", "REPOS", "SEC_MORNING", "SEC_NIGHT", null])
+  shiftType: "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS" | "SEC_MORNING" | "SEC_NIGHT" | null;
 }
 
 export class BatchAssignShiftsDto {

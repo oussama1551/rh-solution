@@ -1,4 +1,4 @@
-export type EngineShiftType = "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS";
+export type EngineShiftType = "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS" | "SEC_MORNING" | "SEC_NIGHT";
 export type EngineAssignedVia = "individual" | "group";
 export type EngineSource = "assigned" | "fallback";
 export type EngineStatus = "complete" | "incomplete";
@@ -193,7 +193,7 @@ function selectPunchesForDefinition(
     }
   }
 
-  if (options.allowNextMorningExit !== false && entry && definition.shiftType === "EVENING" && localMinutes(entry.punchTime) >= 18 * 60) {
+  if (options.allowNextMorningExit !== false && entry && (definition.shiftType === "EVENING" || definition.shiftType === "SEC_NIGHT") && localMinutes(entry.punchTime) >= 16 * 60) {
     const nextMorningExit = available
       .filter(punch => punch.id !== entry.id)
       .filter(punch => localDateKey(punch.punchTime) === addDaysKey(workDate, 1))
