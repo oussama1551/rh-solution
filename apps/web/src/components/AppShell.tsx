@@ -40,6 +40,7 @@ const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard;
   { label: "Terminaux", to: "/devices", icon: Monitor, permission: "devices.read" },
   { label: "Rapports", to: "/reports", icon: BarChart3, permission: "reports.read" },
   { label: "Synthèse paie", to: "/reports/summary", icon: BarChart3, permission: "reports.read" },
+  { label: "Traitement avance", to: "/advanced-treatment", icon: ClipboardCheck, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH"] },
   { label: "Contrôle paie", to: "/admin/payroll-control", icon: ShieldCheck, permission: "payroll.control" },
   { label: "Synchronisation", to: "/admin/sync", icon: RefreshCw, permission: "sync.run" },
   { label: "Annuaire SAP", to: "/admin/sap-directory", icon: Users, permission: "employees.manage" },

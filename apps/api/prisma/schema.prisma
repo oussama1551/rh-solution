@@ -42,6 +42,8 @@ model User {
   declaredAbsenceReversals AbsenceReversalRequest[] @relation("AbsenceReversalDeclarer")
   approvedAbsenceReversals AbsenceReversalRequest[] @relation("AbsenceReversalApprover")
   reviewedPresumedAbsences PresumedAbsence[]
+  advancedTreatmentConfirmations AdvancedTreatmentConfirmation[] @relation("AdvancedTreatmentConfirmer")
+  advancedTreatmentFreezes AdvancedTreatmentFreeze[] @relation("AdvancedTreatmentFreezer")
   subUnitAccess UserSubUnitAccess[]
   notifications Notification[] @relation("NotificationRecipient")
   createdChatConversations ChatConversation[] @relation("ChatConversationCreator")
@@ -384,6 +386,8 @@ model Employee {
   annualLeaveBalances AnnualLeaveBalance[]
   summaryRecords AttendanceSummaryRecord[]
   presumedAbsences PresumedAbsence[]
+  advancedTreatmentConfirmations AdvancedTreatmentConfirmation[]
+  advancedTreatmentFreezes AdvancedTreatmentFreeze[]
 
   @@index([groupId])
   @@index([status])
@@ -410,6 +414,58 @@ model PresumedAbsence {
   @@index([status])
   @@index([reviewedById])
   @@map("presumed_absences")
+}
+
+enum AdvancedTreatmentRiskLevel {
+  HIGH
+  MEDIUM
+  LOW
+
+  @@map("advanced_treatment_risk_level")
+}
+
+model AdvancedTreatmentConfirmation {
+  id            String                     @id @default(uuid()) @db.Uuid
+  employeeId    String                     @map("employee_id") @db.Uuid
+  periodStart   DateTime                   @map("period_start") @db.Date
+  periodEnd     DateTime                   @map("period_end") @db.Date
+  riskLevel     AdvancedTreatmentRiskLevel @map("risk_level")
+  emptyDays     Int                        @default(0) @map("empty_days")
+  punchedDays   Int                        @default(0) @map("punched_days")
+  justifiedDays Int                        @default(0) @map("justified_days")
+  bankAccount   String?                    @map("bank_account") @db.VarChar(120)
+  note          String?
+  confirmedById String?                    @map("confirmed_by") @db.Uuid
+  confirmedAt   DateTime                   @default(now()) @map("confirmed_at") @db.Timestamptz(6)
+  createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  employee      Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  confirmedBy   User?                      @relation("AdvancedTreatmentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+  @@index([riskLevel])
+  @@index([confirmedById])
+  @@map("advanced_treatment_confirmations")
+}
+
+model AdvancedTreatmentFreeze {
+  id          String   @id @default(uuid()) @db.Uuid
+  employeeId  String   @map("employee_id") @db.Uuid
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+  frozenById  String?  @map("frozen_by") @db.Uuid
+  frozenAt    DateTime @default(now()) @map("frozen_at") @db.Timestamptz(6)
+  reason      String?
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  frozenBy    User?    @relation("AdvancedTreatmentFreezer", fields: [frozenById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+  @@index([frozenById])
+  @@map("advanced_treatment_freezes")
 }
 
 model ShiftDefinition {
@@ -780,6 +836,7 @@ model SapEmployeeDirectory {
   structure       String?   @db.VarChar(180)
   hireDate        DateTime? @map("hire_date") @db.Date
   mobile          String?   @db.VarChar(80)
+  bankAccount     String?   @map("bank_account") @db.VarChar(120)
   rawPayload      Json?     @map("raw_payload")
   lastSyncedAt    DateTime  @default(now()) @map("last_synced_at") @db.Timestamptz(6)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

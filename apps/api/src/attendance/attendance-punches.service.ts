@@ -221,8 +221,8 @@ export class AttendancePunchesService {
       .sort((left, right) => `${right.workDate}${right.firstPunchTime}`.localeCompare(`${left.workDate}${left.firstPunchTime}`));
   }
 
-  async employeeMonthlyCalendar(employeeId: string, month: string, actor?: RequestUser) {
-    const range = resolveRange({ month });
+  async employeeMonthlyCalendar(employeeId: string, month: string, actor?: RequestUser, from?: string, to?: string) {
+    const range = resolveRange({ month, from, to });
     const [rawDays, summaryRecords, employeeFallback, liveDeclarations, fallbackPunches] = await Promise.all([
       this.buildDailyRows({ employeeId }, range, actor),
       this.prisma.attendanceSummaryRecord.findMany({

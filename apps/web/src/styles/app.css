@@ -526,6 +526,34 @@ select {
 .badge-blue { color: var(--blue); background: #dbeafe; }
 .badge-gray { color: #475569; background: #e2e8f0; }
 
+.data-table tr.advanced-missing-bank-row td {
+  background: #fff1f2;
+}
+
+.data-table tr.advanced-frozen-row td {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.data-table tr.advanced-missing-bank-row.advanced-frozen-row td {
+  background: #f8fafc;
+}
+
+.advanced-justified-cell {
+  border-left: 4px solid #db2777;
+  padding-left: 8px;
+}
+
+.advanced-justified-cell strong {
+  color: #be185d;
+}
+
+.advanced-justified-cell .justified-note {
+  color: #be185d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .biometric-badges {
   display: flex;
   flex-wrap: wrap;
@@ -1006,6 +1034,15 @@ select {
   align-content: start;
   gap: 4px;
   background: white;
+}
+
+.calendar-day.advanced-punch-day {
+  background: #ecfdf5;
+  box-shadow: inset 3px 0 0 #10b981;
+}
+
+.calendar-day.advanced-punch-day:hover {
+  background: #dcfce7;
 }
 
 .calendar-day strong {

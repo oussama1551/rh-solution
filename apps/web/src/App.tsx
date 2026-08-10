@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { useAuth } from "./lib/auth";
 import { AttendancePunchesPage } from "./pages/AttendancePunchesPage";
+import { AdvancedTreatmentPage } from "./pages/AdvancedTreatmentPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DailyAbsencesPage } from "./pages/DailyAbsencesPage";
 import { DevicesPage } from "./pages/DevicesPage";
@@ -61,6 +62,7 @@ export function App() {
         <Route path="/devices" element={<DevicesPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reports/summary" element={<SummaryReportPage />} />
+        <Route path="/advanced-treatment" element={<AdvancedTreatmentPage />} />
         <Route path="/admin/payroll-control" element={<PayrollControlPage />} />
         <Route path="/admin/sync" element={<SyncAdminPage />} />
         <Route path="/admin/sap-directory" element={<SapDirectoryPage />} />

@@ -11,6 +11,7 @@ const ADMINISTRATION_MODULES = [
   { code: "org", label: "Organigramme", path: "/org", permission: PermissionCode.OrgRead, group: "rh" },
   { code: "devices", label: "Terminaux", path: "/devices", permission: PermissionCode.DevicesRead, group: "system" },
   { code: "reports", label: "Rapports", path: "/reports", permission: PermissionCode.ReportsRead, group: "pilotage" },
+  { code: "advanced-treatment", label: "Traitement avance", path: "/advanced-treatment", permission: PermissionCode.ReportsRead, group: "pilotage" },
   { code: "sync", label: "Synchronisation", path: "/admin/sync", permission: PermissionCode.SyncRun, group: "system" },
   { code: "sap-directory", label: "Annuaire SAP", path: "/admin/sap-directory", permission: PermissionCode.EmployeesManage, group: "rh" },
   { code: "administration", label: "Administration", path: "/admin/users", permission: PermissionCode.AdministrationRead, group: "system" }

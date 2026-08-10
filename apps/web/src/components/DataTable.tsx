@@ -17,7 +17,8 @@ export function DataTable<T>({
   empty = "Aucune donnée trouvée.",
   pageSize = 20,
   loading = false,
-  loadingLabel
+  loadingLabel,
+  rowClassName
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -25,6 +26,7 @@ export function DataTable<T>({
   pageSize?: number;
   loading?: boolean;
   loadingLabel?: string;
+  rowClassName?: (row: T) => string;
 }) {
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
@@ -74,7 +76,7 @@ export function DataTable<T>({
               <td className="empty-row" colSpan={columns.length}>{empty}</td>
             </tr>
           ) : visibleRows.map((row, index) => (
-            <tr key={index}>
+            <tr key={index} className={rowClassName?.(row) || undefined}>
               {columns.map(column => <td key={column.key}>{column.render(row)}</td>)}
             </tr>
           ))}

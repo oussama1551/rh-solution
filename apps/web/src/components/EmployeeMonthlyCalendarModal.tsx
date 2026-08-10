@@ -8,8 +8,20 @@ import { shiftLabels, timingLabels } from "../lib/shiftLabels";
 import { AttendanceMonthlyCalendar } from "../lib/types";
 import { useApi } from "../lib/useApi";
 
-export function EmployeeMonthlyCalendarModal({ employee, month, onClose }: { employee: { id: string; name: string } | null; month?: string; onClose: () => void }) {
-  const calendarPath = employee ? `/api/attendance/employees/${employee.id}/monthly-calendar?month=${month || currentMonth()}` : null;
+export function EmployeeMonthlyCalendarModal({
+  employee,
+  month,
+  from,
+  to,
+  onClose
+}: {
+  employee: { id: string; name: string } | null;
+  month?: string;
+  from?: string;
+  to?: string;
+  onClose: () => void;
+}) {
+  const calendarPath = employee ? employeeCalendarPath(employee.id, month, from, to) : null;
   const calendar = useApi<AttendanceMonthlyCalendar | null>(calendarPath, null);
 
   if (!employee) return null;
@@ -32,6 +44,13 @@ export function EmployeeMonthlyCalendarModal({ employee, month, onClose }: { emp
       </div>
     </div>
   );
+}
+
+function employeeCalendarPath(employeeId: string, month?: string, from?: string, to?: string) {
+  const params = new URLSearchParams({ month: month || currentMonth() });
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  return `/api/attendance/employees/${employeeId}/monthly-calendar?${params.toString()}`;
 }
 
 function AttendanceCalendar({ data }: { data: AttendanceMonthlyCalendar }) {

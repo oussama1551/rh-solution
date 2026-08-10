@@ -7,6 +7,7 @@ export type SapEmployee = {
   Structure: string | null;
   Date_Entrer: Date | string | null;
   mobile: string | null;
+  bankAccount?: string | null;
 };
 
 export type SapCandidate = SapEmployee & {

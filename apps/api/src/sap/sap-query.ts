@@ -1,17 +1,17 @@
 export const SAP_EMPLOYEES_QUERY = `
-(SELECT 'FABCOM_DEV-' || T0."empID" as "empID", TO_NVARCHAR(T0."U_CMC_ID") as "biotimeId", T0."lastName" as "Nom", T0."firstName" as "Prenom", T1."Name" as "Poste", T2."Name" as "Structure", T0."startDate" as "Date_Entrer", T0."mobile"
+(SELECT 'FABCOM_DEV-' || T0."empID" as "empID", TO_NVARCHAR(T0."U_CMC_ID") as "biotimeId", T0."lastName" as "Nom", T0."firstName" as "Prenom", T1."Name" as "Poste", T2."Name" as "Structure", T0."startDate" as "Date_Entrer", T0."mobile", TO_NVARCHAR(T0."U_CMC_NACP3") as "bankAccount"
     FROM "FABCOM_DEV".OHEM T0
     LEFT JOIN "FABCOM_DEV"."@CMC_EMPL" T1 ON T0."U_CMC_EMP" = T1."Code"
     LEFT JOIN "FABCOM_DEV"."@CMC_UGO" T2 ON T0."U_CMC_UGO" = T2."Code"
     WHERE T0."Active" ='Y')
 UNION
-(SELECT 'RECYCLAGE_DEV-' || T0."empID" as "empID", TO_NVARCHAR(T0."U_CMC_ID") as "biotimeId", T0."lastName" as "Nom", T0."firstName" as "Prenom", T1."Name" as "Poste", T2."Name" as "Structure", T0."startDate" as "Date_Entrer", T0."mobile"
+(SELECT 'RECYCLAGE_DEV-' || T0."empID" as "empID", TO_NVARCHAR(T0."U_CMC_ID") as "biotimeId", T0."lastName" as "Nom", T0."firstName" as "Prenom", T1."Name" as "Poste", T2."Name" as "Structure", T0."startDate" as "Date_Entrer", T0."mobile", TO_NVARCHAR(T0."U_CMC_NACP3") as "bankAccount"
     FROM "RECYCLAGE_DEV".OHEM T0
     LEFT JOIN "RECYCLAGE_DEV"."@CMC_EMPL" T1 ON T0."U_CMC_EMP" = T1."Code"
     LEFT JOIN "RECYCLAGE_DEV"."@CMC_UGO" T2 ON T0."U_CMC_UGO" = T2."Code"
     WHERE T0."Active" ='Y')
 UNION
-(SELECT 'NEWTECH_DEV-' || T0."empID" as "empID", TO_NVARCHAR(T0."U_CMC_ID") as "biotimeId", T0."lastName" as "Nom", T0."firstName" as "Prenom", T1."Name" as "Poste", T2."Name" as "Structure", T0."startDate" as "Date_Entrer", T0."mobile"
+(SELECT 'NEWTECH_DEV-' || T0."empID" as "empID", TO_NVARCHAR(T0."U_CMC_ID") as "biotimeId", T0."lastName" as "Nom", T0."firstName" as "Prenom", T1."Name" as "Poste", T2."Name" as "Structure", T0."startDate" as "Date_Entrer", T0."mobile", TO_NVARCHAR(T0."U_CMC_NACP3") as "bankAccount"
     FROM "NEWTECH_DEV".OHEM T0
     LEFT JOIN "NEWTECH_DEV"."@CMC_EMPL" T1 ON T0."U_CMC_EMP" = T1."Code"
     LEFT JOIN "NEWTECH_DEV"."@CMC_UGO" T2 ON T0."U_CMC_UGO" = T2."Code"

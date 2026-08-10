@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { AuditModule } from "./audit/audit.module";
 import { AdministrationModule } from "./administration/administration.module";
+import { AdvancedTreatmentModule } from "./advanced-treatment/advanced-treatment.module";
 import { AttendanceModule } from "./attendance/attendance.module";
 import { AuthModule } from "./auth/auth.module";
 import { ChatModule } from "./chat/chat.module";
@@ -25,6 +26,7 @@ import { UsersModule } from "./users/users.module";
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AdministrationModule,
+    AdvancedTreatmentModule,
     AuditModule,
     AttendanceModule,
     AuthModule,

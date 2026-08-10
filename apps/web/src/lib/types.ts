@@ -65,6 +65,57 @@ export type Employee = {
   group?: OrgGroup | null;
 };
 
+export type AdvancedTreatmentRiskLevel = "HIGH" | "MEDIUM" | "LOW";
+
+export type AdvancedTreatmentRow = {
+  employee: {
+    id: string;
+    code: string;
+    fullName: string;
+    lastName: string | null;
+    firstName: string | null;
+    company: string | null;
+    department: string | null;
+    hireDate: string | null;
+    unitName: string | null;
+    subUnitName: string | null;
+    groupName: string | null;
+  };
+  periodStart: string;
+  periodEnd: string;
+  seniorityMonths: number;
+  bankAccount: string | null;
+  punchedDays: number;
+  emptyDays: number;
+  justifiedDays: number;
+  sickDays: number;
+  leaveDays: number;
+  analyzableDays: number;
+  riskLevel: AdvancedTreatmentRiskLevel;
+  riskLabel: string;
+  confirmed: boolean;
+  confirmedAt: string | null;
+  confirmedBy: UserSummary | null;
+  frozen: boolean;
+  frozenAt: string | null;
+  frozenBy: UserSummary | null;
+};
+
+export type AdvancedTreatmentResponse = {
+  periodStart: string;
+  periodEnd: string;
+  rows: AdvancedTreatmentRow[];
+  stats: {
+    total: number;
+    confirmed: number;
+    frozen: number;
+    missingBankAccount: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+};
+
 export type BiometricEnrollment = {
   fingerprint: boolean;
   face: boolean;

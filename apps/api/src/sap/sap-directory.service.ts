@@ -252,6 +252,7 @@ export class SapDirectoryService {
       structure: sap.Structure || null,
       hireDate: sap.Date_Entrer ? new Date(sap.Date_Entrer) : null,
       mobile: sap.mobile || null,
+      bankAccount: sap.bankAccount?.trim() || null,
       rawPayload: sap as unknown as Prisma.InputJsonValue,
       lastSyncedAt: new Date()
     };
@@ -269,6 +270,7 @@ export class SapDirectoryService {
       structure: sap.Structure || null,
       hireDate: sap.Date_Entrer ? new Date(sap.Date_Entrer) : null,
       mobile: sap.mobile || null,
+      bankAccount: sap.bankAccount?.trim() || null,
       rawPayload: sap as unknown as Prisma.InputJsonValue,
       lastSyncedAt: new Date()
     };

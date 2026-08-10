@@ -128,8 +128,14 @@ export class AttendanceController {
 
   @Get("employees/:id/monthly-calendar")
   @Permissions(PermissionCode.AttendanceRead)
-  employeeMonthlyCalendar(@Param("id") id: string, @Query("month") month?: string, @CurrentUser() actor?: RequestUser) {
-    return this.punches.employeeMonthlyCalendar(id, month || new Date().toISOString().slice(0, 7), actor);
+  employeeMonthlyCalendar(
+    @Param("id") id: string,
+    @Query("month") month?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @CurrentUser() actor?: RequestUser
+  ) {
+    return this.punches.employeeMonthlyCalendar(id, month || new Date().toISOString().slice(0, 7), actor, from, to);
   }
 
   @Get("presumed-absences")
