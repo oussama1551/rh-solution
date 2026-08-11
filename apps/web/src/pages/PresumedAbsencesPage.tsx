@@ -1,5 +1,5 @@
 import { CalendarDays, Check, RefreshCw, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { DataTable } from "../components/DataTable";
 import { EmployeeMonthlyCalendarModal } from "../components/EmployeeMonthlyCalendarModal";
@@ -34,14 +34,28 @@ export function PresumedAbsencesPage() {
   const [rejectNote, setRejectNote] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const autoDetectingRef = useRef(false);
+  const lastAutoDetectDateRef = useRef<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const month = useMemo(() => (filters.date || todayKey()).slice(0, 7), [filters.date]);
 
-  async function detect() {
-    setDetecting(true);
-    setMessage(null);
-    setError(null);
+  useEffect(() => {
+    const date = filters.date || todayKey();
+    if (lastAutoDetectDateRef.current === date || autoDetectingRef.current) return;
+    lastAutoDetectDateRef.current = date;
+    autoDetectingRef.current = true;
+    detect(true).finally(() => {
+      autoDetectingRef.current = false;
+    });
+  }, [filters.date]);
+
+  async function detect(silent = false) {
+    if (!silent) {
+      setDetecting(true);
+      setMessage(null);
+      setError(null);
+    }
     try {
       const result = await api<{
         skipped: boolean;
@@ -54,6 +68,10 @@ export function PresumedAbsencesPage() {
         heuristicChecked?: number;
         heuristicCreated?: number;
       }>(`/api/attendance/presumed-absences/detect?date=${encodeURIComponent(filters.date || todayKey())}`, { method: "POST" });
+      if (silent) {
+        await rows.reload();
+        return;
+      }
       if (result.skipped) {
         setMessage(result.reason === "friday" ? "Détection ignorée: vendredi exclu." : "Détection ignorée: seuil 08:30 non atteint.");
       } else {
@@ -70,9 +88,9 @@ export function PresumedAbsencesPage() {
       }
       await rows.reload();
     } catch (detectError) {
-      setError(readableError(detectError, "Vérification impossible."));
+      if (!silent) setError(readableError(detectError, "Vérification impossible."));
     } finally {
-      setDetecting(false);
+      if (!silent) setDetecting(false);
     }
   }
 
@@ -116,7 +134,7 @@ export function PresumedAbsencesPage() {
     <>
       <PageHeader
         title="Absences non confirmées"
-        actions={<Button variant="primary" onClick={detect} disabled={detecting}><RefreshCw size={15} /> {detecting ? "Vérification..." : "Vérifier les absences"}</Button>}
+        actions={<Button variant="primary" onClick={() => detect()} disabled={detecting}><RefreshCw size={15} /> {detecting ? "Vérification..." : "Vérifier les absences"}</Button>}
       />
       <section className="panel">
         {message && <div className="alert alert-success">{message}</div>}

@@ -86,12 +86,15 @@ export class PresumedAbsenceService {
       },
       select: { id: true, employeeCode: true, biotimeCode: true, localMatricule: true }
     });
+    const justifiedEmployeeIds = await this.justifiedEmployeeIds(employees.map(employee => employee.id), targetDay);
 
     let created = 0;
     const from = yesterday;
     const to = new Date(reference);
 
     for (const employee of employees) {
+      if (justifiedEmployeeIds.has(employee.id)) continue;
+
       const punchCount = await this.countIdentityPunches(employee, from, to);
 
       if (punchCount > 0) continue;
@@ -152,6 +155,7 @@ export class PresumedAbsenceService {
     const status = filters.status && filters.status !== "ALL" ? filters.status as PresumedAbsenceStatus : undefined;
     const date = filters.date ? startOfLocalDay(new Date(`${filters.date}T00:00:00`)) : undefined;
     await this.autoRejectInactivePending(date);
+    await this.autoRejectJustifiedPending(date);
     const search = filters.search?.trim();
     const employeeScope = employeeScopeWhere(actor);
 
@@ -193,6 +197,7 @@ export class PresumedAbsenceService {
 
     const visible = [];
     for (const row of rows) {
+      if (await this.isJustified(row.employeeId, row.date)) continue;
       if (row.status === PresumedAbsenceStatus.PENDING_REVIEW && row.basis === BASIS) {
         const from = addDays(row.date, -1);
         const to = addDays(row.date, 1);
@@ -332,6 +337,93 @@ export class PresumedAbsenceService {
     }
 
     return rows.length;
+  }
+
+  private async autoRejectJustifiedPending(date?: Date) {
+    const rows = await this.prisma.presumedAbsence.findMany({
+      where: {
+        status: PresumedAbsenceStatus.PENDING_REVIEW,
+        ...(date ? { date } : {})
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            employeeCode: true,
+            biotimeCode: true,
+            localMatricule: true,
+            fullName: true,
+            department: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    let rejected = 0;
+    for (const row of rows) {
+      if (!(await this.isJustified(row.employeeId, row.date))) continue;
+      const updated = await this.prisma.presumedAbsence.update({
+        where: { id: row.id },
+        data: {
+          status: PresumedAbsenceStatus.REJECTED,
+          reviewedAt: new Date(),
+          reviewNote: "Rejet automatique: jour couvert par maladie ou congé approuvé."
+        },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              employeeCode: true,
+              biotimeCode: true,
+              localMatricule: true,
+              fullName: true,
+              department: true,
+              status: true
+            }
+          },
+          reviewedBy: { select: { id: true, username: true, fullName: true } }
+        }
+      });
+      rejected += 1;
+      await this.audit.record({
+        action: "presumed_absence.auto_reject_justified",
+        entityType: "presumed_absence",
+        entityId: row.id,
+        before: row as unknown as Prisma.InputJsonValue,
+        after: updated as unknown as Prisma.InputJsonValue,
+        metadata: { reason: "approved_sick_or_leave" }
+      });
+    }
+
+    return rejected;
+  }
+
+  private async isJustified(employeeId: string, date: Date) {
+    const count = await Promise.all([
+      this.prisma.sickLeaveDeclaration.count({
+        where: { employeeId, dateStart: { lte: date }, dateEnd: { gte: date }, status: "APPROVED" }
+      }),
+      this.prisma.leaveDeclaration.count({
+        where: { employeeId, dateStart: { lte: date }, dateEnd: { gte: date }, status: "APPROVED" }
+      })
+    ]);
+    return count[0] > 0 || count[1] > 0;
+  }
+
+  private async justifiedEmployeeIds(employeeIds: string[], date: Date) {
+    if (!employeeIds.length) return new Set<string>();
+    const [sickLeaves, leaves] = await Promise.all([
+      this.prisma.sickLeaveDeclaration.findMany({
+        where: { employeeId: { in: employeeIds }, dateStart: { lte: date }, dateEnd: { gte: date }, status: "APPROVED" },
+        select: { employeeId: true }
+      }),
+      this.prisma.leaveDeclaration.findMany({
+        where: { employeeId: { in: employeeIds }, dateStart: { lte: date }, dateEnd: { gte: date }, status: "APPROVED" },
+        select: { employeeId: true }
+      })
+    ]);
+    return new Set([...sickLeaves.map(row => row.employeeId), ...leaves.map(row => row.employeeId)]);
   }
 }
 
