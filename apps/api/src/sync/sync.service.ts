@@ -141,7 +141,7 @@ export class SyncService implements OnModuleInit {
       }
 
       const nextCursor = await this.computeCursor();
-      const { reactivatedCount, backfillPunchesCount, backfillRowsCount, employeePunchSweepCount, employeePunchSweepRowsCount, employeePunchSweepEmployeesCount, ...logCounts } = counts;
+      const { reactivatedCount, missingBiotimeArchivedCount, backfillPunchesCount, backfillRowsCount, employeePunchSweepCount, employeePunchSweepRowsCount, employeePunchSweepEmployeesCount, ...logCounts } = counts;
       const updated = await this.prisma.syncLog.update({
         where: { id: log.id },
         data: {
@@ -152,6 +152,7 @@ export class SyncService implements OnModuleInit {
           metadata: {
             full: Boolean(options.full),
             reactivatedCount: reactivatedCount || 0,
+            missingBiotimeArchivedCount: missingBiotimeArchivedCount || 0,
             backfillPunchesCount: backfillPunchesCount || 0,
             backfillRowsCount: backfillRowsCount || 0,
             employeePunchSweepCount: employeePunchSweepCount || 0,
@@ -356,6 +357,7 @@ export class SyncService implements OnModuleInit {
     let employeePunchSweepRowsCount = 0;
     let employeePunchSweepEmployeesCount = 0;
     let reactivatedCount = options.full ? await this.countEmployeesReactivatedByFullSync(employees, resigns) : 0;
+    let missingBiotimeArchivedCount = 0;
 
     if (employeesResult.status === "fulfilled") {
       for (const row of employees) {
@@ -399,9 +401,10 @@ export class SyncService implements OnModuleInit {
 
     if (options.full) {
       reactivatedCount += await this.reconcileCurrentResigns(resigns);
+      missingBiotimeArchivedCount = await this.archiveEmployeesMissingFromBiotime(employees, resigns);
     }
 
-    return { employeesCount, resignsCount, devicesCount, punchesCount, reactivatedCount, backfillPunchesCount, backfillRowsCount, employeePunchSweepCount, employeePunchSweepRowsCount, employeePunchSweepEmployeesCount };
+    return { employeesCount, resignsCount, devicesCount, punchesCount, reactivatedCount, missingBiotimeArchivedCount, backfillPunchesCount, backfillRowsCount, employeePunchSweepCount, employeePunchSweepRowsCount, employeePunchSweepEmployeesCount };
   }
 
   private transactionSyncFrom(cursorPunchesSince?: string) {
@@ -873,6 +876,77 @@ export class SyncService implements OnModuleInit {
     });
 
     return staleResignedEmployees.length;
+  }
+
+  private async archiveEmployeesMissingFromBiotime(employees: BioTimeRecord[], resigns: BioTimeRecord[]) {
+    const currentEmployeeIds = new Set(
+      employees
+        .map(row => employeeSourceId(row))
+        .filter(Boolean)
+    );
+    const currentResignedIds = new Set(
+      resigns
+        .map(row => resignEmployeeSourceId(row))
+        .filter(Boolean)
+    );
+
+    if (!currentEmployeeIds.size) {
+      this.logger.warn("Archivage employés supprimés BioTime ignoré: snapshot employés BioTime vide.");
+      return 0;
+    }
+
+    const localActiveCount = await this.prisma.employee.count({ where: { status: EmployeeStatus.ACTIVE } });
+    const minimumSnapshotRatio = Number(this.config.get("BIOTIME_MISSING_EMPLOYEE_MIN_SNAPSHOT_RATIO") || 0.5);
+    const safeRatio = Number.isFinite(minimumSnapshotRatio) && minimumSnapshotRatio > 0 ? minimumSnapshotRatio : 0.5;
+    if (localActiveCount > 0 && currentEmployeeIds.size < Math.floor(localActiveCount * safeRatio)) {
+      this.logger.warn(
+        `Archivage employés supprimés BioTime ignoré: snapshot trop petit (${currentEmployeeIds.size}/${localActiveCount}, seuil ${safeRatio}).`
+      );
+      return 0;
+    }
+
+    const missingEmployees = await this.prisma.employee.findMany({
+      where: {
+        status: EmployeeStatus.ACTIVE,
+        zktecoId: {
+          notIn: [...currentEmployeeIds, ...currentResignedIds]
+        }
+      },
+      select: { id: true, zktecoId: true, employeeCode: true, fullName: true, sourcePayload: true }
+    });
+
+    if (!missingEmployees.length) {
+      return 0;
+    }
+
+    const archivedAt = new Date();
+    await this.prisma.$transaction(async tx => {
+      await tx.employee.updateMany({
+        where: { id: { in: missingEmployees.map(employee => employee.id) } },
+        data: {
+          status: EmployeeStatus.RESIGNED,
+          resignedAt: archivedAt,
+          sourceUpdatedAt: archivedAt
+        }
+      });
+
+      await tx.sapEmployeeDirectory.updateMany({
+        where: { employeeId: { in: missingEmployees.map(employee => employee.id) } },
+        data: {
+          employeeId: null,
+          biotimeId: null,
+          lastSyncedAt: archivedAt
+        }
+      });
+    });
+
+    this.logger.warn(
+      `BioTime full sync: ${missingEmployees.length} employé(s) actif(s) local(aux) archivé(s), absents du snapshot BioTime: ` +
+      missingEmployees.slice(0, 10).map(employee => `${employee.employeeCode}/${employee.zktecoId}`).join(", ") +
+      (missingEmployees.length > 10 ? "..." : "")
+    );
+
+    return missingEmployees.length;
   }
 
   private async countEmployeesReactivatedByFullSync(employees: BioTimeRecord[], resigns: BioTimeRecord[]) {

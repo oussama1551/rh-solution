@@ -19,6 +19,7 @@ export type BioTimeSyncCounts = {
   employeePunchSweepRowsCount?: number;
   employeePunchSweepEmployeesCount?: number;
   reactivatedCount?: number;
+  missingBiotimeArchivedCount?: number;
 };
 
 export type ProgressCallback = (page: number, totalRows: number) => void;

@@ -997,6 +997,7 @@ export type SyncLog = {
   metadata?: {
     full?: boolean;
     reactivatedCount?: number;
+    missingBiotimeArchivedCount?: number;
     backfillPunchesCount?: number;
     backfillRowsCount?: number;
     employeePunchSweepCount?: number;

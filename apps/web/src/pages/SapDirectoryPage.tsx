@@ -41,7 +41,7 @@ export function SapDirectoryPage() {
       const result = await api<SapDirectoryRefreshResult>("/api/sap-directory/refresh", { method: "POST" });
       const bio = result.biotimeSync;
       const bioText = bio
-        ? `BioTime: ${bio.employeesCount} employé(s), ${bio.resignsCount} démission(s), ${bio.metadata?.reactivatedCount || 0} réactivé(s). `
+        ? `BioTime: ${bio.employeesCount} employé(s), ${bio.resignsCount} démission(s), ${bio.metadata?.reactivatedCount || 0} réactivé(s), ${bio.metadata?.missingBiotimeArchivedCount || 0} archivé(s) car absents de BioTime. `
         : "";
       setMessage(`${bioText}SAP: ${result.total} employé(s), ${result.linked} lié(s), ${result.unlinked} sans BioTime.`);
       directory.reload();
