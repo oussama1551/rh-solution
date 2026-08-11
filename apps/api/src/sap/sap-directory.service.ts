@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { EmployeeMappingMethod, EmployeeMappingStatus, Prisma } from "@prisma/client";
 import { extractSapCompany, nameSearchScore, normalizeName, normalizePhone, phoneMatches } from "./sap-normalization";
 import { SapDirectoryCacheService } from "./sap-directory-cache.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -68,6 +68,17 @@ export class SapDirectoryService {
         phone: true
       }
     });
+    const confirmedMappings = await this.prisma.employeeMapping.findMany({
+      where: { status: EmployeeMappingStatus.confirmed },
+      orderBy: { matchedAt: "desc" },
+      select: { sapEmpId: true, biotimeEmployeeId: true }
+    });
+    const confirmedEmployeeBySap = new Map<string, string>();
+    confirmedMappings.forEach(mapping => {
+      if (!confirmedEmployeeBySap.has(mapping.sapEmpId)) {
+        confirmedEmployeeBySap.set(mapping.sapEmpId, mapping.biotimeEmployeeId);
+      }
+    });
     const employeeByBiotimeId = new Map<string, string>();
     for (const employee of employees) {
       [employee.zktecoId, employee.biotimeCode, employee.employeeCode, employee.localMatricule]
@@ -79,7 +90,8 @@ export class SapDirectoryService {
 
     for (const sap of sapEmployees) {
       const biotimeId = sap.biotimeId?.trim() || null;
-      const strictEmployeeId = (biotimeId ? employeeByBiotimeId.get(biotimeId) || null : null)
+      const confirmedEmployeeId = confirmedEmployeeBySap.get(sap.empID) || null;
+      const strictEmployeeId = confirmedEmployeeId || (biotimeId ? employeeByBiotimeId.get(biotimeId) || null : null)
         || employeeByBiotimeId.get(sap.empID)
         || null;
       const nameEmployeeId = strictEmployeeId ? null : this.findUniqueEmployeeByNameAndPhone(sap, employees);
@@ -226,6 +238,7 @@ export class SapDirectoryService {
         }
       });
 
+      await this.upsertConfirmedMapping(tx, employee, sap);
       await this.reconcileLocalMatricules(tx);
 
       return directory;
@@ -337,6 +350,57 @@ export class SapDirectoryService {
     }
 
     return { updated, cleared };
+  }
+
+  private async upsertConfirmedMapping(client: Prisma.TransactionClient, employee: { id: string }, sap: { sapEmpId: string; fullName: string; mobile: string | null; poste: string | null; structure: string | null; sapCompany: string }) {
+    await client.employeeMapping.updateMany({
+      where: {
+        sapEmpId: sap.sapEmpId,
+        NOT: { biotimeEmployeeId: employee.id },
+        status: EmployeeMappingStatus.confirmed
+      },
+      data: { status: EmployeeMappingStatus.rejected }
+    });
+    await client.employeeMapping.updateMany({
+      where: {
+        biotimeEmployeeId: employee.id,
+        NOT: { sapEmpId: sap.sapEmpId },
+        status: EmployeeMappingStatus.confirmed
+      },
+      data: { status: EmployeeMappingStatus.rejected }
+    });
+    await client.employeeMapping.upsert({
+      where: { biotimeEmployeeId_sapEmpId: { biotimeEmployeeId: employee.id, sapEmpId: sap.sapEmpId } },
+      update: {
+        sapFullName: sap.fullName,
+        sapMobile: sap.mobile,
+        matchMethod: EmployeeMappingMethod.manual,
+        confidenceScore: 1,
+        status: EmployeeMappingStatus.confirmed,
+        matchedAt: new Date(),
+        metadata: {
+          company: sap.sapCompany,
+          Poste: sap.poste,
+          Structure: sap.structure,
+          source: "sap_directory_manual_link"
+        }
+      },
+      create: {
+        biotimeEmployeeId: employee.id,
+        sapEmpId: sap.sapEmpId,
+        sapFullName: sap.fullName,
+        sapMobile: sap.mobile,
+        matchMethod: EmployeeMappingMethod.manual,
+        confidenceScore: 1,
+        status: EmployeeMappingStatus.confirmed,
+        metadata: {
+          company: sap.sapCompany,
+          Poste: sap.poste,
+          Structure: sap.structure,
+          source: "sap_directory_manual_link"
+        }
+      }
+    });
   }
 
 }
