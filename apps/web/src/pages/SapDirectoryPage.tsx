@@ -43,7 +43,10 @@ export function SapDirectoryPage() {
       const bioText = bio
         ? `BioTime: ${bio.employeesCount} employé(s), ${bio.resignsCount} démission(s), ${bio.metadata?.reactivatedCount || 0} réactivé(s), ${bio.metadata?.missingBiotimeArchivedCount || 0} archivé(s) car absents de BioTime. `
         : "";
-      setMessage(`${bioText}SAP: ${result.total} employé(s), ${result.linked} lié(s), ${result.unlinked} sans BioTime.`);
+      const matricules = result.localMatricules
+        ? ` Matricules locaux: ${result.localMatricules.updated} mis à jour, ${result.localMatricules.cleared} nettoyé(s).`
+        : "";
+      setMessage(`${bioText}SAP: ${result.total} employé(s), ${result.linked} lié(s), ${result.unlinked} sans BioTime.${matricules}`);
       directory.reload();
       biotimeDirectory.reload();
     } catch (error) {

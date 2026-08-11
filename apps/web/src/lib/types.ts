@@ -1206,6 +1206,10 @@ export type SapDirectoryRefreshResult = {
   total: number;
   linked: number;
   unlinked: number;
+  localMatricules?: {
+    updated: number;
+    cleared: number;
+  };
   cache: SapDirectoryCacheStatus;
   biotimeSync?: SyncLog;
 };

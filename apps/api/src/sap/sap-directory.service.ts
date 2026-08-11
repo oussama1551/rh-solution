@@ -76,7 +76,6 @@ export class SapDirectoryService {
     }
     let linked = 0;
     let autoNameLinked = 0;
-    let localMatriculesUpdated = 0;
 
     for (const sap of sapEmployees) {
       const biotimeId = sap.biotimeId?.trim() || null;
@@ -99,17 +98,15 @@ export class SapDirectoryService {
         }
       });
 
-      if (employeeId && await this.applyLocalMatriculeIfEmpty(employeeId, sap.empID)) {
-        localMatriculesUpdated += 1;
-      }
     }
+    const localMatricules = await this.reconcileLocalMatricules();
 
     return {
       total: sapEmployees.length,
       linked,
       unlinked: sapEmployees.length - linked,
       autoNameLinked,
-      localMatriculesUpdated,
+      localMatricules,
       cache: this.cache.status()
     };
   }
@@ -229,10 +226,7 @@ export class SapDirectoryService {
         }
       });
 
-      await tx.employee.update({
-        where: { id: employeeId },
-        data: { localMatricule: sapEmpId }
-      });
+      await this.reconcileLocalMatricules(tx);
 
       return directory;
     });
@@ -302,15 +296,54 @@ export class SapDirectoryService {
     return best.employee.id;
   }
 
-  private async applyLocalMatriculeIfEmpty(employeeId: string, sapEmpId: string) {
-    const result = await this.prisma.employee.updateMany({
-      where: {
-        id: employeeId,
-        OR: [{ localMatricule: null }, { localMatricule: "" }]
-      },
-      data: { localMatricule: sapEmpId }
-    });
-    return result.count > 0;
+  private async reconcileLocalMatricules(client: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const [sapRows, employees] = await Promise.all([
+      client.sapEmployeeDirectory.findMany({
+        where: { employeeId: { not: null } },
+        select: { sapEmpId: true, employeeId: true, lastSyncedAt: true },
+        orderBy: [{ lastSyncedAt: "desc" }, { sapEmpId: "asc" }]
+      }),
+      client.employee.findMany({
+        select: { id: true, localMatricule: true }
+      })
+    ]);
+
+    const desiredByEmployee = new Map<string, string>();
+    const sapCodes = new Set<string>();
+    for (const row of sapRows) {
+      sapCodeVariants(row.sapEmpId).forEach(code => sapCodes.add(code));
+      if (row.employeeId && !desiredByEmployee.has(row.employeeId)) {
+        desiredByEmployee.set(row.employeeId, row.sapEmpId);
+      }
+    }
+
+    let updated = 0;
+    let cleared = 0;
+    for (const employee of employees) {
+      const desired = desiredByEmployee.get(employee.id) || null;
+      const current = employee.localMatricule?.trim() || null;
+      if (desired) {
+        if (current !== desired) {
+          await client.employee.update({ where: { id: employee.id }, data: { localMatricule: desired } });
+          updated += 1;
+        }
+        continue;
+      }
+
+      if (current && sapCodes.has(current)) {
+        await client.employee.update({ where: { id: employee.id }, data: { localMatricule: null } });
+        cleared += 1;
+      }
+    }
+
+    return { updated, cleared };
   }
 
+}
+
+function sapCodeVariants(value: string) {
+  const trimmed = value.trim();
+  const withoutDev = trimmed.replace("_DEV-", "-");
+  const withDev = withoutDev.replace(/^([A-Z]+)-/i, "$1_DEV-");
+  return [trimmed, withoutDev, withDev].filter(Boolean);
 }
