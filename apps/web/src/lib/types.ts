@@ -116,6 +116,35 @@ export type AdvancedTreatmentResponse = {
   };
 };
 
+export type AdvancedTreatmentCalendar = {
+  employee: {
+    id: string;
+    fullName: string;
+  };
+  periodStart: string;
+  periodEnd: string;
+  stats: {
+    daysWithPunches: number;
+    punchCount: number;
+    sickDays: number;
+    leaveDays: number;
+    warningDays: number;
+    periodDays: number;
+  };
+  days: Array<{
+    date: string;
+    punches: Array<{
+      id: string;
+      punchTime: string;
+      punchHour: string;
+      sourceDevice: string | null;
+    }>;
+    sick: boolean;
+    leave: boolean;
+    warning: boolean;
+  }>;
+};
+
 export type BiometricEnrollment = {
   fingerprint: boolean;
   face: boolean;

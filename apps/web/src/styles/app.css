@@ -524,6 +524,7 @@ select {
 .badge-red { color: var(--red); background: #fee2e2; }
 .badge-orange { color: var(--orange); background: #ffedd5; }
 .badge-blue { color: var(--blue); background: #dbeafe; }
+.badge-pink { color: #be185d; background: #fce7f3; }
 .badge-gray { color: #475569; background: #e2e8f0; }
 
 .data-table tr.advanced-missing-bank-row td {
@@ -1043,6 +1044,37 @@ select {
 
 .calendar-day.advanced-punch-day:hover {
   background: #dcfce7;
+}
+
+.calendar-day.advanced-sick-day {
+  background: #fdf2f8;
+  box-shadow: inset 3px 0 0 #ec4899;
+}
+
+.calendar-day.advanced-leave-day {
+  background: #ecfeff;
+  box-shadow: inset 3px 0 0 #0891b2;
+}
+
+.calendar-day.advanced-warning-day {
+  background: #fff7ed;
+  box-shadow: inset 4px 0 0 #f97316;
+}
+
+.calendar-day.advanced-warning-day.advanced-punch-day,
+.calendar-day.advanced-warning-day.advanced-sick-day,
+.calendar-day.advanced-warning-day.advanced-leave-day {
+  background: #fff7ed;
+}
+
+.advanced-warning-stat {
+  background: #fff7ed !important;
+  border-color: #fdba74 !important;
+}
+
+.advanced-warning-text {
+  color: #c2410c !important;
+  font-weight: 800;
 }
 
 .calendar-day strong {

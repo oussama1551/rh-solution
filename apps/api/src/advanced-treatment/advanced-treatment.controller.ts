@@ -63,4 +63,10 @@ export class AdvancedTreatmentController {
     response.setHeader("Content-Disposition", "attachment; filename=\"traitement-avance-refuses.xlsx\"");
     response.send(buffer);
   }
+
+  @Get(":employeeId/calendar")
+  @Permissions(PermissionCode.ReportsRead)
+  calendar(@Param("employeeId") employeeId: string, @Query() query: AdvancedTreatmentQuery, @CurrentUser() actor: RequestUser) {
+    return this.service.calendar(employeeId, query, actor);
+  }
 }

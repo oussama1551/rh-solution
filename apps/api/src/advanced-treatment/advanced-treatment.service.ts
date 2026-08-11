@@ -54,6 +54,19 @@ type AdvancedTreatmentRow = {
   frozenBy: { id: string; username: string; fullName: string | null } | null;
 };
 
+type AdvancedTreatmentCalendarDay = {
+  date: string;
+  punches: Array<{
+    id: string;
+    punchTime: string;
+    punchHour: string;
+    sourceDevice: string | null;
+  }>;
+  sick: boolean;
+  leave: boolean;
+  warning: boolean;
+};
+
 @Injectable()
 export class AdvancedTreatmentService {
   constructor(
@@ -336,6 +349,89 @@ export class AdvancedTreatmentService {
     return { before, after, refreshed: result.total, linked: result.linked };
   }
 
+  async calendar(employeeId: string, query: AdvancedTreatmentQuery, actor: RequestUser) {
+    const period = normalizePeriod(query);
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, AND: [employeeScopeWhere(actor)] },
+      select: { id: true, fullName: true }
+    });
+    if (!employee) throw new BadRequestException("Employé introuvable ou hors périmètre.");
+
+    const from = new Date(`${period.startDate}T00:00:00`);
+    const toExclusive = new Date(`${addDays(period.endDate, 1)}T00:00:00`);
+    const [punches, sickLeaves, leaves] = await Promise.all([
+      this.prisma.attendancePunch.findMany({
+        where: {
+          employeeId,
+          punchTime: { gte: from, lt: toExclusive }
+        },
+        orderBy: { punchTime: "asc" },
+        select: { id: true, punchTime: true, rawPayload: true }
+      }),
+      this.prisma.sickLeaveDeclaration.findMany({
+        where: {
+          employeeId,
+          status: ApprovalStatus.APPROVED,
+          dateStart: { lte: parseDateKey(period.endDate) },
+          dateEnd: { gte: parseDateKey(period.startDate) }
+        },
+        select: { employeeId: true, dateStart: true, dateEnd: true }
+      }),
+      this.prisma.leaveDeclaration.findMany({
+        where: {
+          employeeId,
+          status: ApprovalStatus.APPROVED,
+          dateStart: { lte: parseDateKey(period.endDate) },
+          dateEnd: { gte: parseDateKey(period.startDate) }
+        },
+        select: { employeeId: true, dateStart: true, dateEnd: true }
+      })
+    ]);
+
+    const punchesByDate = new Map<string, AdvancedTreatmentCalendarDay["punches"]>();
+    punches.forEach(punch => {
+      const date = localDateKey(punch.punchTime);
+      const rows = punchesByDate.get(date) || [];
+      rows.push({
+        id: punch.id,
+        punchTime: punch.punchTime.toISOString(),
+        punchHour: localTimeKey(punch.punchTime),
+        sourceDevice: rawString(punch.rawPayload, ["terminal_alias", "terminal_name", "device_name", "terminal_sn", "sn", "terminal"])
+      });
+      punchesByDate.set(date, rows);
+    });
+
+    const sickDays = declarationCalendarDaysByEmployee(period, sickLeaves).get(employeeId) || new Set<string>();
+    const leaveDays = declarationCalendarDaysByEmployee(period, leaves).get(employeeId) || new Set<string>();
+    const days = enumerateDateKeys(period.startDate, period.endDate).map<AdvancedTreatmentCalendarDay>(date => {
+      const dayPunches = punchesByDate.get(date) || [];
+      const sick = sickDays.has(date);
+      const leave = leaveDays.has(date);
+      return {
+        date,
+        punches: dayPunches,
+        sick,
+        leave,
+        warning: dayPunches.length > 0 && (sick || leave)
+      };
+    });
+
+    return {
+      employee: { id: employee.id, fullName: employee.fullName },
+      periodStart: period.startDate,
+      periodEnd: period.endDate,
+      stats: {
+        daysWithPunches: days.filter(day => day.punches.length > 0).length,
+        punchCount: punches.length,
+        sickDays: days.filter(day => day.sick).length,
+        leaveDays: days.filter(day => day.leave).length,
+        warningDays: days.filter(day => day.warning).length,
+        periodDays: days.length
+      },
+      days
+    };
+  }
+
   private async computeRows(period: { startDate: string; endDate: string }, query: AdvancedTreatmentQuery, actor: RequestUser): Promise<AdvancedTreatmentRow[]> {
     const where = this.employeeWhere(period, query, actor);
     const employees = await this.prisma.employee.findMany({
@@ -511,6 +607,16 @@ function declarationDaysByEmployee(period: { startDate: string; endDate: string 
   return map;
 }
 
+function declarationCalendarDaysByEmployee(period: { startDate: string; endDate: string }, rows: Array<{ employeeId: string; dateStart: Date; dateEnd: Date }>) {
+  const map = new Map<string, Set<string>>();
+  rows.forEach(row => {
+    const start = toDateKey(row.dateStart) < period.startDate ? period.startDate : toDateKey(row.dateStart);
+    const end = toDateKey(row.dateEnd) > period.endDate ? period.endDate : toDateKey(row.dateEnd);
+    enumerateDateKeys(start, end).forEach(date => addToMapSet(map, row.employeeId, date));
+  });
+  return map;
+}
+
 function addToMapSet(map: Map<string, Set<string>>, key: string, value: string) {
   const set = map.get(key) || new Set<string>();
   set.add(value);
@@ -575,4 +681,23 @@ function formatDateTimeForExcel(value: string) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localTimeKey(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
+}
+
+function rawString(payload: Prisma.JsonValue | null | undefined, keys: string[]) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim() && value.trim() !== "-") return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return null;
 }

@@ -1,4 +1,4 @@
-import { CalendarDays, Check, Download, RefreshCw, Search, X } from "lucide-react";
+import { CalendarDays, Check, Download, Printer, RefreshCw, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { DataTable } from "../components/DataTable";
@@ -6,7 +6,7 @@ import { FilterField, FiltersBar } from "../components/FiltersBar";
 import { LoadingState } from "../components/LoadingState";
 import { PageHeader } from "../components/PageHeader";
 import { api, fileUrl } from "../lib/api";
-import { AdvancedTreatmentResponse, AdvancedTreatmentRiskLevel, AdvancedTreatmentRow, EmployeeRawPunch, OrgUnit } from "../lib/types";
+import { AdvancedTreatmentCalendar, AdvancedTreatmentResponse, AdvancedTreatmentRiskLevel, AdvancedTreatmentRow, OrgUnit } from "../lib/types";
 import { useApi, useSessionFilters } from "../lib/useApi";
 
 const DEFAULT_START = "2026-07-26";
@@ -233,24 +233,15 @@ function AdvancedTreatmentPunchCalendar({
   onClose: () => void;
 }) {
   const params = new URLSearchParams({
-    from: `${from}T00:00:00`,
-    to: `${to}T23:59:59`,
-    limit: "5000"
+    startDate: from,
+    endDate: to
   });
-  const punches = useApi<EmployeeRawPunch[]>(employee ? `/api/employees/${employee.id}/punches?${params.toString()}` : null, []);
+  const calendar = useApi<AdvancedTreatmentCalendar | null>(employee ? `/api/advanced-treatment/${employee.id}/calendar?${params.toString()}` : null, null);
   if (!employee) return null;
 
-  const byDate = new Map<string, EmployeeRawPunch[]>();
-  punches.data.forEach(punch => {
-    const rows = byDate.get(punch.punchDate) || [];
-    rows.push(punch);
-    byDate.set(punch.punchDate, rows);
-  });
-  byDate.forEach(rows => rows.sort((left, right) => left.punchTime.localeCompare(right.punchTime)));
   const days = periodDays(from, to);
   const cells = buildPeriodCells(days);
-  const workedDays = [...byDate.values()].filter(rows => rows.length > 0).length;
-  const punchCount = punches.data.length;
+  const byDate = new Map((calendar.data?.days || []).map(day => [day.date, day]));
 
   return (
     <div className="modal-backdrop">
@@ -261,24 +252,39 @@ function AdvancedTreatmentPunchCalendar({
             <strong>{employee.name}</strong>
             <small className="muted">{formatDate(from)} - {formatDate(to)}</small>
           </div>
-          <button className="icon-button" onClick={onClose} title="Fermer"><X size={18} /></button>
+          <div className="row-actions no-print">
+            <Button variant="secondary" onClick={printEmployeeCalendar}><Printer size={16} /> Imprimer</Button>
+            <button className="icon-button" onClick={onClose} title="Fermer"><X size={18} /></button>
+          </div>
         </div>
-        {punches.loading && <LoadingState label="Chargement des pointages réels..." />}
-        {!punches.loading && (
+        {calendar.loading && <LoadingState label="Chargement du calendrier..." />}
+        {calendar.error && <div className="alert alert-error">Impossible de charger le calendrier: {calendar.error}</div>}
+        {!calendar.loading && calendar.data && (
           <>
             <div className="attendance-summary-strip compact">
-              <div><span>Jours avec pointage</span><strong>{workedDays}</strong></div>
-              <div><span>Pointages réels</span><strong>{punchCount}</strong></div>
-              <div><span>Période</span><strong>{days.length}</strong></div>
+              <div><span>Jours avec pointage</span><strong>{calendar.data.stats.daysWithPunches}</strong></div>
+              <div><span>Pointages réels</span><strong>{calendar.data.stats.punchCount}</strong></div>
+              <div><span>Maladie</span><strong>{calendar.data.stats.sickDays}</strong></div>
+              <div><span>Congé</span><strong>{calendar.data.stats.leaveDays}</strong></div>
+              <div className={calendar.data.stats.warningDays > 0 ? "advanced-warning-stat" : ""}><span>À vérifier</span><strong>{calendar.data.stats.warningDays}</strong></div>
+              <div><span>Période</span><strong>{calendar.data.stats.periodDays}</strong></div>
             </div>
             <div className="attendance-calendar">
               {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(day => <div className="calendar-head" key={day}>{day}</div>)}
               {cells.map(cell => {
-                const dayPunches = cell.date ? byDate.get(cell.date) || [] : [];
+                const day = cell.date ? byDate.get(cell.date) : null;
+                const dayPunches = day?.punches || [];
                 const hasPunches = dayPunches.length > 0;
+                const classes = [
+                  hasPunches ? "advanced-punch-day" : "",
+                  day?.sick ? "advanced-sick-day" : "",
+                  day?.leave ? "advanced-leave-day" : "",
+                  day?.warning ? "advanced-warning-day" : ""
+                ].filter(Boolean).join(" ");
                 return (
-                  <div key={cell.key} className={`calendar-day ${hasPunches ? "advanced-punch-day" : ""}`}>
+                  <div key={cell.key} className={`calendar-day ${classes}`}>
                     {cell.date && <><strong>{cell.day}</strong><small>{cell.month}</small></>}
+                    {day?.warning && <span className="badge badge-red">À vérifier</span>}
                     {hasPunches && (
                       <>
                         <span className="badge badge-green">Pointé</span>
@@ -288,6 +294,9 @@ function AdvancedTreatmentPunchCalendar({
                         ))}
                       </>
                     )}
+                    {day?.sick && <span className="badge badge-pink">Maladie</span>}
+                    {day?.leave && <span className="badge badge-blue">Congé</span>}
+                    {day?.warning && <small className="advanced-warning-text">Pointage réel pendant maladie/congé.</small>}
                   </div>
                 );
               })}
@@ -360,4 +369,14 @@ function formatDate(value: string) {
 
 function displayDateTime(value: string) {
   return new Date(value).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function printEmployeeCalendar() {
+  document.body.dataset.printMode = "employee-calendar";
+  const cleanup = () => {
+    delete document.body.dataset.printMode;
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  window.setTimeout(() => window.print(), 50);
 }
