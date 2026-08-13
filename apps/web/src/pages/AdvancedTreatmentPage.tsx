@@ -31,7 +31,16 @@ export function AdvancedTreatmentPage() {
     periodStart: filters.startDate,
     periodEnd: filters.endDate,
     rows: [],
-    stats: { total: 0, confirmed: 0, frozen: 0, missingBankAccount: 0, high: 0, medium: 0, low: 0 }
+    stats: {
+      total: 0,
+      confirmed: 0,
+      frozen: 0,
+      missingBankAccount: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      confirmedByCompany: { FABCOM: 0, RECYCLAGE: 0, NEWTECH: 0, OTHER: 0 }
+    }
   });
   const [calendarEmployee, setCalendarEmployee] = useState<{ id: string; name: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -150,6 +159,9 @@ export function AdvancedTreatmentPage() {
           <div><span>Risque très élevé</span><strong>{analysis.data.stats.high}</strong></div>
           <div><span>Risque moyen</span><strong>{analysis.data.stats.medium}</strong></div>
           <div><span>Besoin confirmation</span><strong>{analysis.data.stats.low}</strong></div>
+          <div><span>Acceptés FABCOM</span><strong>{analysis.data.stats.confirmedByCompany.FABCOM}</strong></div>
+          <div><span>Acceptés RECYCLAGE</span><strong>{analysis.data.stats.confirmedByCompany.RECYCLAGE}</strong></div>
+          <div><span>Acceptés NEWTECH</span><strong>{analysis.data.stats.confirmedByCompany.NEWTECH}</strong></div>
         </div>
 
         <div className="row-actions">
@@ -158,6 +170,11 @@ export function AdvancedTreatmentPage() {
             <RefreshCw size={16} /> {refreshingSap ? "SAP..." : "Actualiser comptes SAP"}
           </Button>
           <a className="btn btn-secondary" href={fileUrl("/api/advanced-treatment/export/excel", params)}><Download size={16} /> Excel confirmés</a>
+          {["FABCOM", "RECYCLAGE", "NEWTECH"].map(company => (
+            <a key={company} className="btn btn-secondary" href={fileUrl("/api/advanced-treatment/export/excel", withCompany(params, company))}>
+              <Download size={16} /> Excel {company}
+            </a>
+          ))}
           <a className="btn btn-secondary" href={fileUrl("/api/advanced-treatment/export/frozen/excel", params)}><Download size={16} /> Excel refusés</a>
           <span className="muted">Période par défaut fixe, modifiable: {formatDate(filters.startDate)} - {formatDate(filters.endDate)}</span>
         </div>
@@ -187,9 +204,11 @@ export function AdvancedTreatmentPage() {
               </div>
             ), sortValue: row => row.justifiedDays },
             { key: "risk", header: "Analyse", render: row => <RiskBadge level={row.riskLevel} label={row.riskLabel} />, sortValue: row => riskRank(row.riskLevel) },
-            { key: "confirmed", header: "Confirmation", render: row => row.confirmed ? (
+            { key: "confirmed", header: "Confirmation", render: row => row.frozen ? (
+              <div className="table-main-cell"><span className="badge badge-gray">Gelé</span><span>{row.frozenBy?.fullName || row.frozenBy?.username || "-"} · {row.frozenAt ? displayDateTime(row.frozenAt) : "-"}</span></div>
+            ) : row.confirmed ? (
               <div className="table-main-cell"><span className="badge badge-green">Confirmé</span><span>{row.confirmedBy?.fullName || row.confirmedBy?.username || "-"} · {row.confirmedAt ? displayDateTime(row.confirmedAt) : "-"}</span></div>
-            ) : <span className="badge badge-gray">Non confirmé</span>, sortValue: row => row.confirmed ? 1 : 0 },
+            ) : <span className="badge badge-gray">Non confirmé</span>, sortValue: row => row.frozen ? -1 : row.confirmed ? 1 : 0 },
             { key: "actions", header: "Actions", render: row => (
               <div className="row-actions">
                 <Button variant="ghost" onClick={() => setCalendarEmployee({ id: row.employee.id, name: row.employee.fullName })}><CalendarDays size={15} /> Voir pointages</Button>
@@ -314,6 +333,12 @@ function buildParams(filters: Record<string, string>) {
     if (value) params.set(key, value);
   });
   return params;
+}
+
+function withCompany(params: URLSearchParams, company: string) {
+  const next = new URLSearchParams(params);
+  next.set("company", company);
+  return next;
 }
 
 function RiskBadge({ level, label }: { level: AdvancedTreatmentRiskLevel; label: string }) {

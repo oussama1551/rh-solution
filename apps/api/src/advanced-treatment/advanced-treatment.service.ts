@@ -18,6 +18,7 @@ export type AdvancedTreatmentQuery = {
   groupId?: string;
   riskLevel?: AdvancedTreatmentRiskLevel | "";
   netPay?: string;
+  company?: string;
 };
 
 type AdvancedTreatmentRow = {
@@ -88,9 +89,21 @@ export class AdvancedTreatmentService {
         acc.high += row.riskLevel === AdvancedTreatmentRiskLevel.HIGH ? 1 : 0;
         acc.medium += row.riskLevel === AdvancedTreatmentRiskLevel.MEDIUM ? 1 : 0;
         acc.low += row.riskLevel === AdvancedTreatmentRiskLevel.LOW ? 1 : 0;
+        if (row.confirmed) {
+          acc.confirmedByCompany[normalizeCompany(row.employee.company)] += 1;
+        }
         return acc;
       },
-      { total: 0, confirmed: 0, frozen: 0, missingBankAccount: 0, high: 0, medium: 0, low: 0 }
+      {
+        total: 0,
+        confirmed: 0,
+        frozen: 0,
+        missingBankAccount: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        confirmedByCompany: emptyCompanyStats()
+      }
     );
 
     return { periodStart: period.startDate, periodEnd: period.endDate, rows: filteredRows, stats };
@@ -229,7 +242,7 @@ export class AdvancedTreatmentService {
   async exportConfirmedExcel(query: AdvancedTreatmentQuery, actor: RequestUser) {
     const period = normalizePeriod(query);
     const rows = (await this.computeRows(period, { ...query, riskLevel: undefined }, actor))
-      .filter(row => row.confirmed && !row.frozen);
+      .filter(row => row.confirmed && !row.frozen && matchesCompany(row.employee.company, query.company));
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "RH Solution";
     const sheet = workbook.addWorksheet("Virement");
@@ -512,6 +525,8 @@ export class AdvancedTreatmentService {
       const riskLevel = classifyRisk(punchedDays, emptyDays, analyzableDays, justifiedDays);
       const confirmation = confirmationByEmployee.get(employee.id);
       const freeze = freezeByEmployee.get(employee.id);
+      const frozen = Boolean(freeze);
+      const confirmed = Boolean(confirmation) && !frozen;
       const sapRecord = employee.sapDirectoryRecords[0] || null;
       const bankAccount = sapRecord?.bankAccount || null;
       return {
@@ -540,10 +555,10 @@ export class AdvancedTreatmentService {
         analyzableDays,
         riskLevel,
         riskLabel: riskLabel(riskLevel),
-        confirmed: Boolean(confirmation),
-        confirmedAt: confirmation?.confirmedAt.toISOString() || null,
-        confirmedBy: confirmation?.confirmedBy || null,
-        frozen: Boolean(freeze),
+        confirmed,
+        confirmedAt: confirmed ? confirmation?.confirmedAt.toISOString() || null : null,
+        confirmedBy: confirmed ? confirmation?.confirmedBy || null : null,
+        frozen,
         frozenAt: freeze?.frozenAt.toISOString() || null,
         frozenBy: freeze?.frozenBy || null
       };
@@ -665,6 +680,23 @@ function firstNamePart(value: string) {
 
 function remainingNamePart(value: string) {
   return value.trim().split(/\s+/).slice(1).join(" ");
+}
+
+function emptyCompanyStats() {
+  return { FABCOM: 0, RECYCLAGE: 0, NEWTECH: 0, OTHER: 0 };
+}
+
+function normalizeCompany(value?: string | null): keyof ReturnType<typeof emptyCompanyStats> {
+  const text = (value || "").trim().toUpperCase();
+  if (text.includes("FABCOM")) return "FABCOM";
+  if (text.includes("RECYCLAGE")) return "RECYCLAGE";
+  if (text.includes("NEWTECH") || text.includes("NEW TECH")) return "NEWTECH";
+  return "OTHER";
+}
+
+function matchesCompany(actual?: string | null, expected?: string) {
+  if (!expected?.trim()) return true;
+  return normalizeCompany(actual) === normalizeCompany(expected);
 }
 
 function formatDateForExcel(value: string) {

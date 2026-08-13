@@ -50,8 +50,9 @@ export class AdvancedTreatmentController {
   @Permissions(PermissionCode.ReportsExport)
   async exportExcel(@Query() query: AdvancedTreatmentQuery, @CurrentUser() actor: RequestUser, @Res() response: Response) {
     const buffer = await this.service.exportConfirmedExcel(query, actor);
+    const companySuffix = query.company?.trim() ? `-${query.company.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}` : "";
     response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    response.setHeader("Content-Disposition", "attachment; filename=\"traitement-avance-confirmes.xlsx\"");
+    response.setHeader("Content-Disposition", `attachment; filename="traitement-avance-confirmes${companySuffix}.xlsx"`);
     response.send(buffer);
   }
 

@@ -113,6 +113,12 @@ export type AdvancedTreatmentResponse = {
     high: number;
     medium: number;
     low: number;
+    confirmedByCompany: {
+      FABCOM: number;
+      RECYCLAGE: number;
+      NEWTECH: number;
+      OTHER: number;
+    };
   };
 };
 
