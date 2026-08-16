@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { PresumedAbsenceStatus, Prisma } from "@prisma/client";
+import { AttendanceSummaryStatus, PresumedAbsenceStatus, Prisma } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { employeeScopeWhere } from "../common/employee-scope";
 import { RequestUser } from "../common/request-user.type";
@@ -197,11 +197,9 @@ export class PresumedAbsenceService {
     const visible = [];
     for (const row of rows) {
       if (await this.isJustified(row.employeeId, row.date)) continue;
-      if (row.status === PresumedAbsenceStatus.PENDING_REVIEW && row.basis === BASIS) {
-        const from = addDays(row.date, -1);
-        const to = addDays(row.date, 1);
-        const punchCount = await this.countIdentityPunches(row.employee, from, to);
-        if (punchCount > 0) continue;
+      if (row.status === PresumedAbsenceStatus.PENDING_REVIEW) {
+        const presenceEvidence = await this.countPresenceEvidence(row.employee, row.date, row.basis);
+        if (presenceEvidence > 0) continue;
       }
       visible.push(row);
     }
@@ -279,6 +277,26 @@ export class PresumedAbsenceService {
         OR: identityPunchClauses(employee)
       }
     });
+  }
+
+  private async countPresenceEvidence(
+    employee: { id: string; employeeCode?: string | null; biotimeCode?: string | null; localMatricule?: string | null },
+    date: Date,
+    basis: string
+  ) {
+    const from = basis === BASIS ? addDays(date, -1) : date;
+    const to = addDays(date, 1);
+    const [punchCount, summaryCount] = await Promise.all([
+      this.countIdentityPunches(employee, from, to),
+      this.prisma.attendanceSummaryRecord.count({
+        where: {
+          employeeId: employee.id,
+          workDate: { gte: date, lt: to },
+          status: { in: [AttendanceSummaryStatus.PRESENT, AttendanceSummaryStatus.INCOMPLETE] }
+        }
+      })
+    ]);
+    return punchCount + summaryCount;
   }
 
   private async autoRejectRange(dateRange?: Prisma.DateTimeFilter | Date) {
@@ -442,10 +460,8 @@ export class PresumedAbsenceService {
 
     let rejected = 0;
     for (const row of rows) {
-      const from = row.basis === BASIS ? addDays(row.date, -1) : row.date;
-      const to = row.basis === BASIS ? addDays(row.date, 1) : addDays(row.date, 1);
-      const punchCount = await this.countIdentityPunches(row.employee, from, to);
-      if (punchCount === 0) continue;
+      const presenceEvidence = await this.countPresenceEvidence(row.employee, row.date, row.basis);
+      if (presenceEvidence === 0) continue;
 
       const updated = await this.prisma.presumedAbsence.update({
         where: { id: row.id },
@@ -476,7 +492,7 @@ export class PresumedAbsenceService {
         entityId: row.id,
         before: row as unknown as Prisma.InputJsonValue,
         after: updated as unknown as Prisma.InputJsonValue,
-        metadata: { punchCount, basis: row.basis }
+        metadata: { presenceEvidence, basis: row.basis }
       });
     }
 
