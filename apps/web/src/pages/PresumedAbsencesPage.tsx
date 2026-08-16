@@ -1,4 +1,4 @@
-import { CalendarDays, Check, RefreshCw, Search, X } from "lucide-react";
+import { CalendarDays, Check, Printer, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { DataTable } from "../components/DataTable";
@@ -17,7 +17,12 @@ function todayKey() {
 function buildPath(filters: Record<string, string>) {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
-  if (filters.date) params.set("date", filters.date);
+  if (filters.dateMode === "range") {
+    if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+    if (filters.dateTo) params.set("dateTo", filters.dateTo);
+  } else if (filters.date) {
+    params.set("date", filters.date);
+  }
   if (filters.search) params.set("search", filters.search);
   return `/api/attendance/presumed-absences?${params.toString()}`;
 }
@@ -25,7 +30,10 @@ function buildPath(filters: Record<string, string>) {
 export function PresumedAbsencesPage() {
   const { filters, update, reset } = useSessionFilters("presumed.absences.filters", {
     status: "PENDING_REVIEW",
+    dateMode: "day",
     date: todayKey(),
+    dateFrom: todayKey(),
+    dateTo: todayKey(),
     search: ""
   });
   const rows = useApi<PresumedAbsence[]>(buildPath(filters), []);
@@ -38,17 +46,17 @@ export function PresumedAbsencesPage() {
   const lastAutoDetectDateRef = useRef<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const month = useMemo(() => (filters.date || todayKey()).slice(0, 7), [filters.date]);
+  const month = useMemo(() => (activeCalendarDate(filters) || todayKey()).slice(0, 7), [filters]);
 
   useEffect(() => {
-    const date = filters.date || todayKey();
+    const date = activeCalendarDate(filters) || todayKey();
     if (lastAutoDetectDateRef.current === date || autoDetectingRef.current) return;
     lastAutoDetectDateRef.current = date;
     autoDetectingRef.current = true;
     detect(true).finally(() => {
       autoDetectingRef.current = false;
     });
-  }, [filters.date]);
+  }, [filters.date, filters.dateFrom, filters.dateTo, filters.dateMode]);
 
   async function detect(silent = false) {
     if (!silent) {
@@ -67,7 +75,7 @@ export function PresumedAbsencesPage() {
         plannedCreated?: number;
         heuristicChecked?: number;
         heuristicCreated?: number;
-      }>(`/api/attendance/presumed-absences/detect?date=${encodeURIComponent(filters.date || todayKey())}`, { method: "POST" });
+      }>(`/api/attendance/presumed-absences/detect?date=${encodeURIComponent(activeCalendarDate(filters) || todayKey())}`, { method: "POST" });
       if (silent) {
         await rows.reload();
         return;
@@ -134,7 +142,12 @@ export function PresumedAbsencesPage() {
     <>
       <PageHeader
         title="Absences non confirmées"
-        actions={<Button variant="primary" onClick={() => detect()} disabled={detecting}><RefreshCw size={15} /> {detecting ? "Vérification..." : "Vérifier les absences"}</Button>}
+        actions={(
+          <div className="row-actions">
+            <Button variant="secondary" onClick={printPresumedAbsences} disabled={rows.loading || rows.data.length === 0}><Printer size={15} /> Imprimer</Button>
+            <Button variant="primary" onClick={() => detect()} disabled={detecting}><RefreshCw size={15} /> {detecting ? "Vérification..." : "Vérifier les absences"}</Button>
+          </div>
+        )}
       />
       <section className="panel">
         {message && <div className="alert alert-success">{message}</div>}
@@ -151,9 +164,26 @@ export function PresumedAbsencesPage() {
               <option value="REJECTED">Rejeté</option>
             </select>
           </FilterField>
-          <FilterField label="Date">
-            <input type="date" value={filters.date} onChange={event => update({ date: event.target.value })} />
+          <FilterField label="Mode date">
+            <select value={filters.dateMode} onChange={event => update({ dateMode: event.target.value })}>
+              <option value="day">Jour seul</option>
+              <option value="range">Période</option>
+            </select>
           </FilterField>
+          {filters.dateMode === "range" ? (
+            <>
+              <FilterField label="Du">
+                <input type="date" value={filters.dateFrom} onChange={event => update({ dateFrom: event.target.value })} />
+              </FilterField>
+              <FilterField label="Au">
+                <input type="date" value={filters.dateTo} onChange={event => update({ dateTo: event.target.value })} />
+              </FilterField>
+            </>
+          ) : (
+            <FilterField label="Date">
+              <input type="date" value={filters.date} onChange={event => update({ date: event.target.value })} />
+            </FilterField>
+          )}
         </FiltersBar>
 
         <DataTable
@@ -186,6 +216,7 @@ export function PresumedAbsencesPage() {
             ) }
           ]}
         />
+        <PresumedAbsencesPrint rows={rows.data} filters={filters} />
       </section>
 
       <EmployeeMonthlyCalendarModal employee={calendarEmployee} month={month} onClose={() => setCalendarEmployee(null)} />
@@ -218,6 +249,51 @@ export function PresumedAbsencesPage() {
   );
 }
 
+function PresumedAbsencesPrint({ rows, filters }: { rows: PresumedAbsence[]; filters: Record<string, string> }) {
+  return (
+    <div className="presumed-absences-print print-root">
+      <div className="print-header">
+        <div>
+          <span>RH Solution</span>
+          <h1>Absences non confirmées</h1>
+          <p>{printPeriodLabel(filters)} · Statut: {statusLabel(filters.status)}</p>
+        </div>
+        <strong>{rows.length} résultat(s)</strong>
+      </div>
+      <table className="print-table">
+        <thead>
+          <tr>
+            <th>N°</th>
+            <th>Statut</th>
+            <th>Employé</th>
+            <th>Matricule</th>
+            <th>Département</th>
+            <th>Jour</th>
+            <th>Détection</th>
+            <th>Validation</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={row.id}>
+              <td>{index + 1}</td>
+              <td>{statusLabel(row.status)}</td>
+              <td>{row.employee.fullName}</td>
+              <td>{displayMatricule(row)}</td>
+              <td>{row.employee.department || "-"}</td>
+              <td>{displayDate(row.date)}</td>
+              <td>{displayDateTime(row.detectedAt)}</td>
+              <td>{row.reviewedBy ? `${row.reviewedBy.fullName || row.reviewedBy.username} · ${row.reviewedAt ? displayDateTime(row.reviewedAt) : "-"}` : "-"}</td>
+              <td>{basisLabel(row.basis)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function PresumedStatusBadge({ status, basis }: { status: PresumedAbsenceStatus; basis: string }) {
   const labels: Record<PresumedAbsenceStatus, string> = {
     PENDING_REVIEW: "En attente",
@@ -237,6 +313,36 @@ function basisLabel(value: string) {
   if (value === "daily_absence_report") return "Depuis Absences / planning";
   if (value === "no_punch_heuristic") return "Sans planning · aucun pointage";
   return value || "-";
+}
+
+function activeCalendarDate(filters: Record<string, string>) {
+  return filters.dateMode === "range" ? filters.dateFrom || filters.dateTo : filters.date;
+}
+
+function printPeriodLabel(filters: Record<string, string>) {
+  if (filters.dateMode === "range") {
+    const from = filters.dateFrom ? displayDate(filters.dateFrom) : "...";
+    const to = filters.dateTo ? displayDate(filters.dateTo) : "...";
+    return `Période: ${from} - ${to}`;
+  }
+  return `Jour: ${displayDate(filters.date || todayKey())}`;
+}
+
+function statusLabel(status?: string) {
+  if (status === "PENDING_REVIEW") return "En attente";
+  if (status === "CONFIRMED") return "Confirmé";
+  if (status === "REJECTED") return "Rejeté";
+  return "Tous";
+}
+
+function printPresumedAbsences() {
+  document.body.dataset.printMode = "presumed-absences";
+  const cleanup = () => {
+    delete document.body.dataset.printMode;
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  window.setTimeout(() => window.print(), 50);
 }
 
 function displayMatricule(row: PresumedAbsence) {

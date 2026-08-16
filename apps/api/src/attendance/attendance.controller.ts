@@ -143,10 +143,12 @@ export class AttendanceController {
   presumedAbsenceList(
     @Query("status") status: string | undefined,
     @Query("date") date: string | undefined,
+    @Query("dateFrom") dateFrom: string | undefined,
+    @Query("dateTo") dateTo: string | undefined,
     @Query("search") search: string | undefined,
     @CurrentUser() actor: RequestUser
   ) {
-    return this.presumedAbsences.list({ status, date, search }, actor);
+    return this.presumedAbsences.list({ status, date, dateFrom, dateTo, search }, actor);
   }
 
   @Post("presumed-absences/detect")

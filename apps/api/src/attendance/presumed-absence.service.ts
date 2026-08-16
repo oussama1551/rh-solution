@@ -151,17 +151,16 @@ export class PresumedAbsenceService {
     return { checked: absences.length, created };
   }
 
-  async list(filters: { status?: string; date?: string; search?: string }, actor?: RequestUser) {
+  async list(filters: { status?: string; date?: string; dateFrom?: string; dateTo?: string; search?: string }, actor?: RequestUser) {
     const status = filters.status && filters.status !== "ALL" ? filters.status as PresumedAbsenceStatus : undefined;
-    const date = filters.date ? startOfLocalDay(new Date(`${filters.date}T00:00:00`)) : undefined;
-    await this.autoRejectInactivePending(date);
-    await this.autoRejectJustifiedPending(date);
+    const dateRange = presumedAbsenceDateRange(filters);
+    await this.autoRejectRange(dateRange);
     const search = filters.search?.trim();
     const employeeScope = employeeScopeWhere(actor);
 
     const where: Prisma.PresumedAbsenceWhereInput = {
       status,
-      date,
+      date: dateRange,
       employee: {
         ...employeeScope,
         ...(search ? {
@@ -280,6 +279,24 @@ export class PresumedAbsenceService {
         OR: identityPunchClauses(employee)
       }
     });
+  }
+
+  private async autoRejectRange(dateRange?: Prisma.DateTimeFilter | Date) {
+    if (!dateRange) {
+      await this.autoRejectInactivePending();
+      await this.autoRejectJustifiedPending();
+      return;
+    }
+    if (dateRange instanceof Date) {
+      await this.autoRejectInactivePending(dateRange);
+      await this.autoRejectJustifiedPending(dateRange);
+      return;
+    }
+    if (!dateRange.gte || !dateRange.lte || !(dateRange.gte instanceof Date) || !(dateRange.lte instanceof Date)) return;
+    for (let cursor = new Date(dateRange.gte); cursor <= dateRange.lte; cursor = addDays(cursor, 1)) {
+      await this.autoRejectInactivePending(cursor);
+      await this.autoRejectJustifiedPending(cursor);
+    }
   }
 
   private async autoRejectInactivePending(date?: Date) {
@@ -441,6 +458,20 @@ function identityPunchClauses(employee: { id: string; employeeCode?: string | nu
 function cleanIdentity(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed && trimmed !== "-" ? trimmed : null;
+}
+
+function presumedAbsenceDateRange(filters: { date?: string; dateFrom?: string; dateTo?: string }): Prisma.DateTimeFilter | Date | undefined {
+  if (isDateKey(filters.date)) return startOfLocalDay(new Date(`${filters.date}T00:00:00`));
+  const from = isDateKey(filters.dateFrom) ? startOfLocalDay(new Date(`${filters.dateFrom}T00:00:00`)) : null;
+  const to = isDateKey(filters.dateTo) ? startOfLocalDay(new Date(`${filters.dateTo}T00:00:00`)) : null;
+  if (from && to) return from <= to ? { gte: from, lte: to } : { gte: to, lte: from };
+  if (from) return { gte: from };
+  if (to) return { lte: to };
+  return undefined;
+}
+
+function isDateKey(value?: string) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
 
 function startOfLocalDay(date: Date) {
