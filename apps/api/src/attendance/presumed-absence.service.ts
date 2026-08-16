@@ -285,17 +285,20 @@ export class PresumedAbsenceService {
     if (!dateRange) {
       await this.autoRejectInactivePending();
       await this.autoRejectJustifiedPending();
+      await this.autoRejectPunchedPending();
       return;
     }
     if (dateRange instanceof Date) {
       await this.autoRejectInactivePending(dateRange);
       await this.autoRejectJustifiedPending(dateRange);
+      await this.autoRejectPunchedPending(dateRange);
       return;
     }
     if (!dateRange.gte || !dateRange.lte || !(dateRange.gte instanceof Date) || !(dateRange.lte instanceof Date)) return;
     for (let cursor = new Date(dateRange.gte); cursor <= dateRange.lte; cursor = addDays(cursor, 1)) {
       await this.autoRejectInactivePending(cursor);
       await this.autoRejectJustifiedPending(cursor);
+      await this.autoRejectPunchedPending(cursor);
     }
   }
 
@@ -410,6 +413,70 @@ export class PresumedAbsenceService {
         before: row as unknown as Prisma.InputJsonValue,
         after: updated as unknown as Prisma.InputJsonValue,
         metadata: { reason: "approved_sick_or_leave" }
+      });
+    }
+
+    return rejected;
+  }
+
+  private async autoRejectPunchedPending(date?: Date) {
+    const rows = await this.prisma.presumedAbsence.findMany({
+      where: {
+        status: PresumedAbsenceStatus.PENDING_REVIEW,
+        ...(date ? { date } : {})
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            employeeCode: true,
+            biotimeCode: true,
+            localMatricule: true,
+            fullName: true,
+            department: true,
+            status: true
+          }
+        }
+      }
+    });
+
+    let rejected = 0;
+    for (const row of rows) {
+      const from = row.basis === BASIS ? addDays(row.date, -1) : row.date;
+      const to = row.basis === BASIS ? addDays(row.date, 1) : addDays(row.date, 1);
+      const punchCount = await this.countIdentityPunches(row.employee, from, to);
+      if (punchCount === 0) continue;
+
+      const updated = await this.prisma.presumedAbsence.update({
+        where: { id: row.id },
+        data: {
+          status: PresumedAbsenceStatus.REJECTED,
+          reviewedAt: new Date(),
+          reviewNote: "Rejet automatique: pointage réel trouvé pour ce jour."
+        },
+        include: {
+          employee: {
+            select: {
+              id: true,
+              employeeCode: true,
+              biotimeCode: true,
+              localMatricule: true,
+              fullName: true,
+              department: true,
+              status: true
+            }
+          },
+          reviewedBy: { select: { id: true, username: true, fullName: true } }
+        }
+      });
+      rejected += 1;
+      await this.audit.record({
+        action: "presumed_absence.auto_reject_punched",
+        entityType: "presumed_absence",
+        entityId: row.id,
+        before: row as unknown as Prisma.InputJsonValue,
+        after: updated as unknown as Prisma.InputJsonValue,
+        metadata: { punchCount, basis: row.basis }
       });
     }
 
