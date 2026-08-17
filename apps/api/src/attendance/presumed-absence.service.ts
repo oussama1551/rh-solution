@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { AttendanceSummaryStatus, PresumedAbsenceStatus, Prisma } from "@prisma/client";
+import { AttendanceSummaryStatus, PresumedAbsenceCaseType, PresumedAbsenceStatus, Prisma } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { employeeScopeWhere } from "../common/employee-scope";
 import { RequestUser } from "../common/request-user.type";
@@ -10,6 +10,7 @@ import { RoleCode } from "../roles/role-codes";
 
 const BASIS = "no_punch_heuristic";
 const PLANNED_ABSENCE_BASIS = "daily_absence_report";
+const REST_PRESENCE_BASIS = "rest_schedule_with_punch";
 
 @Injectable()
 export class PresumedAbsenceService {
@@ -23,7 +24,7 @@ export class PresumedAbsenceService {
   async scheduledDetection() {
     const result = await this.detectForToday();
     if (result.created > 0) {
-      console.log(`Absences présumées: ${result.created} nouvelle(s) détection(s) sur ${result.checked} employé(s) vérifié(s).`);
+      console.log(`Vérifications de présence: ${result.created} nouvelle(s) détection(s) sur ${result.checked} cas vérifié(s).`);
     }
   }
 
@@ -35,17 +36,20 @@ export class PresumedAbsenceService {
     const yesterday = addDays(targetDay, -1);
     const nowMinutes = reference.getHours() * 60 + reference.getMinutes();
     const plannedResult = await this.importPlannedAbsences(dateKey, reference);
+    const unexpectedResult = await this.detectUnexpectedPresenceOnRest(dateKey, reference);
 
     if (dateKey !== todayKey) {
       return {
         skipped: false,
         heuristicSkippedReason: "not_today",
-        checked: plannedResult.checked,
-        created: plannedResult.created,
+        checked: plannedResult.checked + unexpectedResult.checked,
+        created: plannedResult.created + unexpectedResult.created,
         plannedChecked: plannedResult.checked,
         plannedCreated: plannedResult.created,
         heuristicChecked: 0,
-        heuristicCreated: 0
+        heuristicCreated: 0,
+        unexpectedPresenceChecked: unexpectedResult.checked,
+        unexpectedPresenceCreated: unexpectedResult.created
       };
     }
 
@@ -53,12 +57,14 @@ export class PresumedAbsenceService {
       return {
         skipped: false,
         heuristicSkippedReason: "friday",
-        checked: plannedResult.checked,
-        created: plannedResult.created,
+        checked: plannedResult.checked + unexpectedResult.checked,
+        created: plannedResult.created + unexpectedResult.created,
         plannedChecked: plannedResult.checked,
         plannedCreated: plannedResult.created,
         heuristicChecked: 0,
-        heuristicCreated: 0
+        heuristicCreated: 0,
+        unexpectedPresenceChecked: unexpectedResult.checked,
+        unexpectedPresenceCreated: unexpectedResult.created
       };
     }
 
@@ -66,12 +72,14 @@ export class PresumedAbsenceService {
       return {
         skipped: false,
         heuristicSkippedReason: "before_threshold",
-        checked: plannedResult.checked,
-        created: plannedResult.created,
+        checked: plannedResult.checked + unexpectedResult.checked,
+        created: plannedResult.created + unexpectedResult.created,
         plannedChecked: plannedResult.checked,
         plannedCreated: plannedResult.created,
         heuristicChecked: 0,
-        heuristicCreated: 0
+        heuristicCreated: 0,
+        unexpectedPresenceChecked: unexpectedResult.checked,
+        unexpectedPresenceCreated: unexpectedResult.created
       };
     }
 
@@ -100,13 +108,15 @@ export class PresumedAbsenceService {
       if (punchCount > 0) continue;
 
       const result = await this.prisma.presumedAbsence.upsert({
-        where: { employeeId_date: { employeeId: employee.id, date: targetDay } },
+        where: { employeeId_date_caseType: { employeeId: employee.id, date: targetDay, caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE } },
         update: {},
         create: {
           employeeId: employee.id,
           date: targetDay,
           detectedAt: reference,
           basis: BASIS,
+          caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE,
+          message: "Aucun pointage réel trouvé pour ce jour.",
           status: PresumedAbsenceStatus.PENDING_REVIEW
         }
       });
@@ -117,12 +127,14 @@ export class PresumedAbsenceService {
 
     return {
       skipped: false,
-      checked: plannedResult.checked + employees.length,
-      created: plannedResult.created + created,
+      checked: plannedResult.checked + unexpectedResult.checked + employees.length,
+      created: plannedResult.created + unexpectedResult.created + created,
       plannedChecked: plannedResult.checked,
       plannedCreated: plannedResult.created,
       heuristicChecked: employees.length,
-      heuristicCreated: created
+      heuristicCreated: created,
+      unexpectedPresenceChecked: unexpectedResult.checked,
+      unexpectedPresenceCreated: unexpectedResult.created
     };
   }
 
@@ -133,13 +145,15 @@ export class PresumedAbsenceService {
 
     for (const row of absences) {
       const result = await this.prisma.presumedAbsence.upsert({
-        where: { employeeId_date: { employeeId: row.employee.id, date: startOfLocalDay(new Date(`${row.date}T00:00:00`)) } },
+        where: { employeeId_date_caseType: { employeeId: row.employee.id, date: startOfLocalDay(new Date(`${row.date}T00:00:00`)), caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE } },
         update: {},
         create: {
           employeeId: row.employee.id,
           date: startOfLocalDay(new Date(`${row.date}T00:00:00`)),
           detectedAt,
           basis: PLANNED_ABSENCE_BASIS,
+          caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE,
+          message: "Absence détectée depuis Absences / planning, sans pointage réel pour ce jour.",
           status: PresumedAbsenceStatus.PENDING_REVIEW
         }
       });
@@ -151,8 +165,64 @@ export class PresumedAbsenceService {
     return { checked: absences.length, created };
   }
 
-  async list(filters: { status?: string; date?: string; dateFrom?: string; dateTo?: string; search?: string }, actor?: RequestUser) {
+  async detectUnexpectedPresenceOnRest(date: string, detectedAt = new Date()) {
+    const targetDay = startOfLocalDay(new Date(`${date}T00:00:00`));
+    const punchDayStart = new Date(`${date}T00:00:00`);
+    const punchDayEnd = new Date(`${date}T00:00:00`);
+    punchDayEnd.setDate(punchDayEnd.getDate() + 1);
+    const assignments = await this.prisma.employeeShiftAssignment.findMany({
+      where: {
+        date: targetDay,
+        status: "APPROVED",
+        shiftDefinition: { shiftType: "REPOS" },
+        employee: { status: "ACTIVE" }
+      },
+      select: {
+        employee: { select: { id: true, employeeCode: true, biotimeCode: true, localMatricule: true } }
+      }
+    });
+    let created = 0;
+
+    for (const assignment of assignments) {
+      const punches = await this.prisma.attendancePunch.findMany({
+        where: {
+          punchTime: { gte: punchDayStart, lt: punchDayEnd },
+          OR: identityPunchClauses(assignment.employee)
+        },
+        select: { punchTime: true },
+        orderBy: { punchTime: "asc" }
+      });
+      if (punches.length === 0) continue;
+
+      const times = punches.map(punch => formatLocalTime(punch.punchTime)).join(", ");
+      const result = await this.prisma.presumedAbsence.upsert({
+        where: {
+          employeeId_date_caseType: {
+            employeeId: assignment.employee.id,
+            date: targetDay,
+            caseType: PresumedAbsenceCaseType.UNEXPECTED_PRESENCE_ON_REST
+          }
+        },
+        update: { message: `Présence inattendue sur jour de repos. Pointage(s) réel(s): ${times}.` },
+        create: {
+          employeeId: assignment.employee.id,
+          date: targetDay,
+          detectedAt,
+          basis: REST_PRESENCE_BASIS,
+          caseType: PresumedAbsenceCaseType.UNEXPECTED_PRESENCE_ON_REST,
+          message: `Présence inattendue sur jour de repos. Pointage(s) réel(s): ${times}.`,
+          status: PresumedAbsenceStatus.PENDING_REVIEW
+        }
+      });
+      if (result.detectedAt.getTime() === detectedAt.getTime()) created += 1;
+    }
+
+    return { checked: assignments.length, created };
+  }
+
+  async list(filters: { status?: string; caseType?: string; date?: string; dateFrom?: string; dateTo?: string; search?: string }, actor?: RequestUser) {
     const status = filters.status && filters.status !== "ALL" ? filters.status as PresumedAbsenceStatus : undefined;
+    const caseType = filters.caseType && filters.caseType !== "ALL" ? filters.caseType as PresumedAbsenceCaseType : undefined;
     const dateRange = presumedAbsenceDateRange(filters);
     await this.autoRejectRange(dateRange);
     const search = filters.search?.trim();
@@ -160,6 +230,7 @@ export class PresumedAbsenceService {
 
     const where: Prisma.PresumedAbsenceWhereInput = {
       status,
+      caseType,
       date: dateRange,
       employee: {
         ...employeeScope,
@@ -196,8 +267,8 @@ export class PresumedAbsenceService {
 
     const visible = [];
     for (const row of rows) {
-      if (await this.isJustified(row.employeeId, row.date)) continue;
-      if (row.status === PresumedAbsenceStatus.PENDING_REVIEW) {
+      if (row.caseType === PresumedAbsenceCaseType.PRESUMED_ABSENCE && await this.isJustified(row.employeeId, row.date)) continue;
+      if (row.caseType === PresumedAbsenceCaseType.PRESUMED_ABSENCE && row.status === PresumedAbsenceStatus.PENDING_REVIEW) {
         const presenceEvidence = await this.countPresenceEvidence(row.employee, row.date, row.basis);
         if (presenceEvidence > 0) continue;
       }
@@ -219,7 +290,7 @@ export class PresumedAbsenceService {
   private async review(id: string, actor: RequestUser, status: "CONFIRMED" | "REJECTED", note?: string) {
     const before = await this.prisma.presumedAbsence.findUnique({ where: { id } });
     if (!before) {
-      throw new NotFoundException("Absence présumée introuvable.");
+      throw new NotFoundException("Cas de présence introuvable.");
     }
 
     const updated = await this.prisma.presumedAbsence.update({
@@ -262,7 +333,7 @@ export class PresumedAbsenceService {
   private ensureReviewer(actor: RequestUser) {
     const roles = new Set(actor.roles || []);
     if (!roles.has(RoleCode.Admin) && !roles.has(RoleCode.DRH) && !roles.has(RoleCode.GRH)) {
-      throw new ForbiddenException("Seuls Admin, DRH et GRH peuvent valider les absences présumées.");
+      throw new ForbiddenException("Seuls Admin, DRH et GRH peuvent valider les cas de présence.");
     }
   }
 
@@ -324,6 +395,7 @@ export class PresumedAbsenceService {
     const rows = await this.prisma.presumedAbsence.findMany({
       where: {
         status: PresumedAbsenceStatus.PENDING_REVIEW,
+        caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE,
         ...(date ? { date } : {}),
         employee: { status: { not: "ACTIVE" } }
       },
@@ -381,6 +453,7 @@ export class PresumedAbsenceService {
     const rows = await this.prisma.presumedAbsence.findMany({
       where: {
         status: PresumedAbsenceStatus.PENDING_REVIEW,
+        caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE,
         ...(date ? { date } : {})
       },
       include: {
@@ -441,6 +514,7 @@ export class PresumedAbsenceService {
     const rows = await this.prisma.presumedAbsence.findMany({
       where: {
         status: PresumedAbsenceStatus.PENDING_REVIEW,
+        caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE,
         ...(date ? { date } : {})
       },
       include: {
@@ -558,12 +632,12 @@ function isDateKey(value?: string) {
 }
 
 function startOfLocalDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 }
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
-  next.setDate(next.getDate() + days);
+  next.setUTCDate(next.getUTCDate() + days);
   return next;
 }
 
@@ -572,4 +646,8 @@ function localDateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatLocalTime(date: Date) {
+  return date.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit", hour12: false });
 }

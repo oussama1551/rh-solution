@@ -31,6 +31,7 @@ export function SummaryReportPage() {
   const params = useMemo(() => buildParams(filters), [filters]);
   const summary = useApi<SummaryReportRow[]>(`/api/reports/summary?${params.toString()}`, []);
   const [message, setMessage] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [generatedRows, setGeneratedRows] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
   const [calendarEmployee, setCalendarEmployee] = useState<SummaryReportRow["employee"] | null>(null);
@@ -51,12 +52,15 @@ export function SummaryReportPage() {
   async function regenerateSummary() {
     setGenerating(true);
     setMessage(null);
+    setGenerateError(null);
     const requestParams = buildParams(filters);
     try {
-      const result = await api<{ records: number; generatedAt: string; periodStart: string; periodEnd: string }>(`/api/reports/summary/generate?${requestParams.toString()}`, { method: "POST" });
+      const result = await api<{ records: number; generatedAt: string; periodStart: string; periodEnd: string; analysisThrough: string }>(`/api/reports/summary/generate?${requestParams.toString()}`, { method: "POST" });
       setGeneratedRows(result.records);
-      setMessage(`Synthèse régénérée pour ${formatDate(result.periodStart)} - ${formatDate(result.periodEnd)}: ${result.records} jour(s) salarié persisté(s). Le tableau ci-dessous reste regroupé par employé.`);
+      setMessage(`Synthèse régénérée pour ${formatDate(result.periodStart)} - ${formatDate(result.periodEnd)}, données calculées jusqu'au ${formatDate(result.analysisThrough)} : ${result.records} jour(s) salarié persisté(s).`);
       await summary.reload();
+    } catch (error) {
+      setGenerateError(readableError(error, "La génération de la synthèse a échoué."));
     } finally {
       setGenerating(false);
     }
@@ -160,6 +164,7 @@ export function SummaryReportPage() {
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}
+        {generateError && <div className="alert alert-error">{generateError}</div>}
         {summary.error && <div className="alert alert-error">Impossible de charger la synthèse persistée: {summary.error}</div>}
 
         <div className="row-actions">
@@ -330,4 +335,14 @@ function exceptionalReasonLabel(value: string) {
     HAJJ: "Hajj"
   };
   return labels[value] || value;
+}
+
+function readableError(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) return fallback;
+  try {
+    const parsed = JSON.parse(error.message);
+    return parsed.message || fallback;
+  } catch {
+    return error.message || fallback;
+  }
 }

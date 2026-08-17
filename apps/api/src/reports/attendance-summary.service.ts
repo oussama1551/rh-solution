@@ -18,17 +18,26 @@ export class AttendanceSummaryService {
 
   async generateForPeriod(filters: ReportFilters, actor?: RequestUser) {
     this.validatePeriod(filters.startDate, filters.endDate);
+    const requestedEndDate = filters.endDate;
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const analysisEndDate = minDate(requestedEndDate, toDateKey(yesterday));
+    if (analysisEndDate < filters.startDate) {
+      return { generatedAt: new Date(), periodStart: filters.startDate, periodEnd: requestedEndDate, analysisThrough: analysisEndDate, records: 0 };
+    }
+    const analysisFilters = { ...filters, endDate: analysisEndDate };
     const generatedAt = new Date();
-    const scopedFilters = { ...filters, status: filters.status || EmployeeStatus.ACTIVE };
+    const scopedFilters = { ...analysisFilters, status: filters.status || EmployeeStatus.ACTIVE };
     const [pointages, scopedEmployees] = await Promise.all([
       this.reports.pointagePlanning(scopedFilters, actor),
       this.prisma.employee.findMany({ where: (this.reports as any).employeeWhere(scopedFilters, actor), select: { id: true } })
     ]);
     const employeeIds = [...new Set(scopedEmployees.map(employee => employee.id))];
-    if (!employeeIds.length) return { generatedAt, periodStart: filters.startDate, periodEnd: filters.endDate, records: 0 };
+    if (!employeeIds.length) return { generatedAt, periodStart: filters.startDate, periodEnd: requestedEndDate, analysisThrough: analysisEndDate, records: 0 };
 
     const from = parseDateKey(filters.startDate);
-    const to = parseDateKey(filters.endDate);
+    const to = parseDateKey(analysisEndDate);
+    const periodEnd = parseDateKey(requestedEndDate);
     const [overtime, compensations, sickLeaves, leaves, absenceReversals] = await Promise.all([
       this.prisma.overtimeDeclaration.findMany({
         where: { employeeId: { in: employeeIds }, date: { gte: from, lte: to }, status: ApprovalStatus.APPROVED }
@@ -83,14 +92,14 @@ export class AttendanceSummaryService {
     const absenceReversalDates = new Set(absenceReversals.map(row => `${row.employeeId}:${toDateKey(row.absenceDate)}`));
     const sickDates = new Set<string>();
     sickLeaves.forEach(row => {
-      for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(filters.endDate, toDateKey(row.dateEnd)))) {
+      for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(analysisEndDate, toDateKey(row.dateEnd)))) {
         sickDates.add(`${row.employeeId}:${date}`);
       }
     });
     const leaveDates = new Set<string>();
     const leaveDetailsByEmployeeDate = new Map<string, { leaveType: any; exceptionalReason: any }>();
     leaves.forEach(row => {
-      for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(filters.endDate, toDateKey(row.dateEnd)))) {
+      for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(analysisEndDate, toDateKey(row.dateEnd)))) {
         const key = `${row.employeeId}:${date}`;
         leaveDates.add(key);
         leaveDetailsByEmployeeDate.set(key, { leaveType: row.leaveType, exceptionalReason: row.exceptionalReason });
@@ -104,7 +113,7 @@ export class AttendanceSummaryService {
         where: {
           employeeId: { in: employeeIds },
           periodStart: from,
-          periodEnd: to
+          periodEnd
         }
       });
 
@@ -130,7 +139,7 @@ export class AttendanceSummaryService {
         const leaveDetails = status === AttendanceSummaryStatus.LEAVE ? leaveDetailsByEmployeeDate.get(key) || null : null;
         const workedHours = status === AttendanceSummaryStatus.SICK ? 0 : row.workedHours || 0;
         await tx.attendanceSummaryRecord.upsert({
-          where: { employeeId_workDate_periodStart_periodEnd: { employeeId: row.employee.id, workDate: parseDateKey(row.workDate), periodStart: from, periodEnd: to } },
+          where: { employeeId_workDate_periodStart_periodEnd: { employeeId: row.employee.id, workDate: parseDateKey(row.workDate), periodStart: from, periodEnd } },
           update: {
             status,
             workedHours: new Prisma.Decimal(workedHours),
@@ -144,7 +153,7 @@ export class AttendanceSummaryService {
             shiftType: row.plannedShiftType as any,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           },
           create: {
             employeeId: row.employee.id,
@@ -161,7 +170,7 @@ export class AttendanceSummaryService {
             shiftType: row.plannedShiftType as any,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           }
         });
         count += 1;
@@ -173,7 +182,7 @@ export class AttendanceSummaryService {
         if (!employeeIds.includes(employeeId)) continue;
         const overtimeHours = overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
         await tx.attendanceSummaryRecord.upsert({
-          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd: to } },
+          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd } },
           update: {
             status: AttendanceSummaryStatus.SICK,
             workedHours: new Prisma.Decimal(0),
@@ -185,7 +194,7 @@ export class AttendanceSummaryService {
             shiftType: null,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           },
           create: {
             employeeId,
@@ -200,7 +209,7 @@ export class AttendanceSummaryService {
             shiftType: null,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           }
         });
         writtenKeys.add(key);
@@ -214,7 +223,7 @@ export class AttendanceSummaryService {
         const overtimeHours = overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
         const leaveDetails = leaveDetailsByEmployeeDate.get(key) || null;
         await tx.attendanceSummaryRecord.upsert({
-          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd: to } },
+          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd } },
           update: {
             status: AttendanceSummaryStatus.LEAVE,
             workedHours: new Prisma.Decimal(0),
@@ -228,7 +237,7 @@ export class AttendanceSummaryService {
             shiftType: null,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           },
           create: {
             employeeId,
@@ -245,7 +254,7 @@ export class AttendanceSummaryService {
             shiftType: null,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           }
         });
         writtenKeys.add(key);
@@ -256,7 +265,7 @@ export class AttendanceSummaryService {
         if (writtenKeys.has(key)) continue;
         const [employeeId, workDate] = key.split(":");
         await tx.attendanceSummaryRecord.upsert({
-          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd: to } },
+          where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd } },
           update: {
             status: AttendanceSummaryStatus.PRESENT,
             workedHours: new Prisma.Decimal(0),
@@ -268,7 +277,7 @@ export class AttendanceSummaryService {
             shiftType: null,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           },
           create: {
             employeeId,
@@ -283,21 +292,21 @@ export class AttendanceSummaryService {
             shiftType: null,
             generatedAt,
             periodStart: from,
-            periodEnd: to
+            periodEnd
           }
         });
         count += 1;
       }
-    });
+    }, { maxWait: 10_000, timeout: 120_000 });
 
     await this.audit.record({
       userId: actor?.id,
       action: "attendance_summary.generate",
       entityType: "attendance_summary_records",
-      metadata: { periodStart: filters.startDate, periodEnd: filters.endDate, records: count } as Prisma.InputJsonValue
+      metadata: { periodStart: filters.startDate, periodEnd: requestedEndDate, analysisThrough: analysisEndDate, records: count } as Prisma.InputJsonValue
     });
 
-    return { generatedAt, periodStart: filters.startDate, periodEnd: filters.endDate, records: count };
+    return { generatedAt, periodStart: filters.startDate, periodEnd: requestedEndDate, analysisThrough: analysisEndDate, records: count };
   }
 
   async report(filters: ReportFilters, actor?: RequestUser): Promise<SummaryReportRow[]> {
@@ -442,14 +451,12 @@ function round2(value: number) {
 function currentPayrollPeriod(todayKey: string) {
   const startDay = Number(process.env.SHIFT_PERIOD_START_DAY || 26);
   const today = parseDateKey(todayKey);
-  const end = new Date(today);
-  end.setUTCDate(end.getUTCDate() - 1);
   const periodEnd = today.getUTCDate() >= startDay
     ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, startDay - 1))
     : new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), startDay - 1));
   const periodStart = new Date(Date.UTC(periodEnd.getUTCFullYear(), periodEnd.getUTCMonth() - 1, startDay));
   return {
     startDate: toDateKey(periodStart),
-    endDate: minDate(toDateKey(periodEnd), toDateKey(end))
+    endDate: toDateKey(periodEnd)
   };
 }

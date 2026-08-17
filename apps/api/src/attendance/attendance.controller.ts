@@ -13,7 +13,7 @@ import { RejectAttendanceFlagDto } from "./dto/reject-attendance-flag.dto";
 import { ShiftPlanningService } from "./shift-planning.service";
 import { ManualDeclarationsService } from "./manual-declarations.service";
 import { PresumedAbsenceService } from "./presumed-absence.service";
-import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
+import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, UpdateLeaveDeclarationDto, UpdateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
 
 @Controller("attendance")
 export class AttendanceController {
@@ -142,13 +142,14 @@ export class AttendanceController {
   @Permissions(PermissionCode.AttendanceRead)
   presumedAbsenceList(
     @Query("status") status: string | undefined,
+    @Query("caseType") caseType: string | undefined,
     @Query("date") date: string | undefined,
     @Query("dateFrom") dateFrom: string | undefined,
     @Query("dateTo") dateTo: string | undefined,
     @Query("search") search: string | undefined,
     @CurrentUser() actor: RequestUser
   ) {
-    return this.presumedAbsences.list({ status, date, dateFrom, dateTo, search }, actor);
+    return this.presumedAbsences.list({ status, caseType, date, dateFrom, dateTo, search }, actor);
   }
 
   @Post("presumed-absences/detect")
@@ -265,6 +266,12 @@ export class AttendanceController {
     return this.declarations.deleteSickLeave(id, user);
   }
 
+  @Patch("declarations/sick-leaves/:id")
+  @Permissions(PermissionCode.AttendanceRead)
+  updateSickLeave(@Param("id") id: string, @Body() dto: UpdateSickLeaveDeclarationDto, @CurrentUser() user: RequestUser) {
+    return this.declarations.updateSickLeave(id, dto, user);
+  }
+
   @Post("declarations/leaves")
   @Permissions(PermissionCode.AttendanceRead)
   createLeave(@Body() dto: CreateLeaveDeclarationDto, @CurrentUser() user: RequestUser) {
@@ -287,6 +294,12 @@ export class AttendanceController {
   @Permissions(PermissionCode.AttendanceRead)
   deleteLeave(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.declarations.deleteLeave(id, user);
+  }
+
+  @Patch("declarations/leaves/:id")
+  @Permissions(PermissionCode.AttendanceRead)
+  updateLeave(@Param("id") id: string, @Body() dto: UpdateLeaveDeclarationDto, @CurrentUser() user: RequestUser) {
+    return this.declarations.updateLeave(id, dto, user);
   }
 
   @Get("declarations/pending")
@@ -323,6 +336,18 @@ export class AttendanceController {
   @Permissions(PermissionCode.AttendanceManage)
   approveLeave(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.declarations.approveLeave(id, user);
+  }
+
+  @Patch("declarations/sick-leaves/:id/approve")
+  @Permissions(PermissionCode.AttendanceManage)
+  approveSickLeave(@Param("id") id: string, @CurrentUser() user: RequestUser) {
+    return this.declarations.approveSickLeave(id, user);
+  }
+
+  @Patch("declarations/sick-leaves/:id/reject")
+  @Permissions(PermissionCode.AttendanceManage)
+  rejectSickLeave(@Param("id") id: string, @Body() dto: { reason?: string }, @CurrentUser() user: RequestUser) {
+    return this.declarations.rejectSickLeave(id, dto.reason, user);
   }
 
   @Patch("declarations/leaves/:id/reject")

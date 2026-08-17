@@ -1,4 +1,4 @@
-import { CalendarPlus, Search, Trash2 } from "lucide-react";
+import { CalendarPlus, Pencil, Search, Trash2, X } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { DataTable } from "../components/DataTable";
@@ -25,6 +25,7 @@ export function LeaveDeclarationPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const historyPath = filters.employeeId
     ? `/api/attendance/declarations/leaves?employeeId=${encodeURIComponent(filters.employeeId)}`
     : "/api/attendance/declarations/leaves";
@@ -63,10 +64,10 @@ export function LeaveDeclarationPage() {
 
     setSaving(true);
     try {
-      const result = await api<{ status: string }>("/api/attendance/declarations/leaves", {
-        method: "POST",
+      const result = await api<{ status: string }>(editingId ? `/api/attendance/declarations/leaves/${editingId}` : "/api/attendance/declarations/leaves", {
+        method: editingId ? "PATCH" : "POST",
         body: JSON.stringify({
-          employeeId: filters.employeeId,
+          ...(editingId ? {} : { employeeId: filters.employeeId }),
           leaveType: filters.leaveType,
           exceptionalReason: filters.leaveType === "EXCEPTIONNEL" ? filters.exceptionalReason || undefined : undefined,
           dateStart: filters.dateStart,
@@ -75,6 +76,7 @@ export function LeaveDeclarationPage() {
         })
       });
       setMessage(result.status === "PENDING_APPROVAL" ? "Congé envoyé en validation." : "Congé enregistré. Il apparaîtra dans la synthèse après régénération de la période.");
+      setEditingId(null);
       update({ note: "" });
       history.reload();
     } catch (caught) {
@@ -99,6 +101,14 @@ export function LeaveDeclarationPage() {
     }
   }
 
+  function editLeave(row: LeaveDeclaration) {
+    setEditingId(row.id);
+    update({ employeeId: row.employee.id, leaveType: row.leaveType, exceptionalReason: row.exceptionalReason || "", dateStart: row.dateStart.slice(0, 10), dateEnd: row.dateEnd.slice(0, 10), note: row.note || "" });
+    setMessage(null); setError(null); window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() { setEditingId(null); update({ note: "" }); }
+
   return (
     <>
       <PageHeader title="Déclarer congé" />
@@ -111,7 +121,7 @@ export function LeaveDeclarationPage() {
             </div>
           </FilterField>
           <FilterField label="Employé">
-            <select value={filters.employeeId} onChange={event => update({ employeeId: event.target.value })}>
+            <select value={filters.employeeId} disabled={Boolean(editingId)} onChange={event => update({ employeeId: event.target.value })}>
               <option value="">Choisir...</option>
               {filteredEmployees.map(employee => (
                 <option key={employee.id} value={employee.id}>
@@ -175,8 +185,9 @@ export function LeaveDeclarationPage() {
             <input value={filters.note} onChange={event => update({ note: event.target.value })} placeholder="Optionnel" />
           </label>
           <Button variant="primary" type="submit" disabled={saving || employees.loading}>
-            {saving ? "Enregistrement..." : "Enregistrer congé"}
+            {saving ? "Enregistrement..." : editingId ? "Enregistrer les modifications" : "Enregistrer congé"}
           </Button>
+          {editingId && <Button variant="secondary" type="button" onClick={cancelEdit}><X size={15} /> Annuler</Button>}
         </form>
 
         <div className="panel-header">
@@ -201,10 +212,13 @@ export function LeaveDeclarationPage() {
             { key: "by", header: "Déclaré par", render: row => row.declaredBy?.fullName || row.declaredBy?.username || "-", sortValue: row => row.declaredBy?.fullName || row.declaredBy?.username || "" },
             { key: "approved", header: "Validé par", render: row => row.approvedBy?.fullName || row.approvedBy?.username || "-", sortValue: row => row.approvedBy?.fullName || row.approvedBy?.username || "" },
             { key: "created", header: "Créé le", render: row => new Date(row.createdAt).toLocaleString("fr-FR"), sortValue: row => row.createdAt },
-            ...(isAdmin ? [{
+            ...((isAdmin || history.data.some(row => row.declaredBy?.id === user?.id)) ? [{
               key: "actions",
               header: "Actions",
-              render: (row: LeaveDeclaration) => <Button variant="danger" onClick={() => deleteLeave(row)}><Trash2 size={15} /> Supprimer</Button>
+              render: (row: LeaveDeclaration) => <div className="row-actions">
+                {row.declaredBy?.id === user?.id && <Button variant="secondary" onClick={() => editLeave(row)}><Pencil size={15} /> Modifier</Button>}
+                {isAdmin && <Button variant="danger" onClick={() => deleteLeave(row)}><Trash2 size={15} /> Supprimer</Button>}
+              </div>
             }] : [])
           ]}
         />

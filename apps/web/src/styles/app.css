@@ -2815,6 +2815,21 @@ body[data-density="mini"] .user-menu {
   gap: 6px;
 }
 
+.selection-toolbar {
+  align-items: center;
+  margin: 12px 0;
+}
+
+.calendar-view-switch {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.planning-assigned-day {
+  background: #eff6ff;
+  border-left: 3px solid var(--blue);
+}
+
 .density-control span {
   color: var(--muted);
   font-size: 11px;

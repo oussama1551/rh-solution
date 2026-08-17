@@ -440,12 +440,15 @@ export type EmployeeRawPunch = {
 };
 
 export type PresumedAbsenceStatus = "PENDING_REVIEW" | "CONFIRMED" | "REJECTED";
+export type PresumedAbsenceCaseType = "PRESUMED_ABSENCE" | "UNEXPECTED_PRESENCE_ON_REST";
 
 export type PresumedAbsence = {
   id: string;
   date: string;
   detectedAt: string;
   basis: string;
+  caseType: PresumedAbsenceCaseType;
+  message?: string | null;
   status: PresumedAbsenceStatus;
   reviewedAt?: string | null;
   reviewNote?: string | null;
@@ -691,6 +694,7 @@ export type ManualDeclarationApprovals = {
     employee: { id: string; fullName: string; localMatricule: string | null; biotimeCode: string | null; employeeCode: string };
     declaredBy: UserSummary | null;
   }>;
+  sickLeaves: SickLeaveDeclaration[];
   leaves: Array<{
     id: string;
     dateStart: string;
@@ -725,6 +729,15 @@ export type AttendanceMonthlyCalendar = {
     days: string[];
   };
   days: AttendanceDailyRow[];
+  planning: Array<{
+    date: string;
+    shiftType: ShiftType;
+    label: string;
+    startTime: string | null;
+    endTime: string | null;
+    assignedVia: "individual" | "group";
+    sourceGroupName: string | null;
+  }>;
   totals: {
     workedDays: number;
     totalHours: number;

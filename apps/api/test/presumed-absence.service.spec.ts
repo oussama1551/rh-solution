@@ -1,5 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
-import { PresumedAbsenceStatus } from "@prisma/client";
+import { PresumedAbsenceCaseType, PresumedAbsenceStatus } from "@prisma/client";
 import { PresumedAbsenceService } from "../src/attendance/presumed-absence.service";
 import { RoleCode } from "../src/roles/role-codes";
 
@@ -12,7 +12,22 @@ function makeService() {
       findMany: jest.fn()
     },
     attendancePunch: {
-      count: jest.fn()
+      count: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([])
+    },
+    employeeShiftAssignment: {
+      findMany: jest.fn().mockResolvedValue([])
+    },
+    sickLeaveDeclaration: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0)
+    },
+    leaveDeclaration: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0)
+    },
+    attendanceSummaryRecord: {
+      count: jest.fn().mockResolvedValue(0)
     },
     presumedAbsence: {
       upsert: jest.fn(),
@@ -42,7 +57,9 @@ describe("PresumedAbsenceService", () => {
       plannedChecked: 0,
       plannedCreated: 0,
       heuristicChecked: 0,
-      heuristicCreated: 0
+      heuristicCreated: 0,
+      unexpectedPresenceChecked: 0,
+      unexpectedPresenceCreated: 0
     });
     expect(reports.dailyAbsences).toHaveBeenCalledWith({ date: "2026-08-07" });
     expect(prisma.employee.findMany).not.toHaveBeenCalled();
@@ -61,7 +78,7 @@ describe("PresumedAbsenceService", () => {
         status: "ACTIVE",
         plannedShiftAssignments: {
           none: {
-            date: new Date(2026, 7, 10)
+            date: new Date(Date.UTC(2026, 7, 10))
           }
         }
       },
@@ -84,7 +101,9 @@ describe("PresumedAbsenceService", () => {
       plannedChecked: 0,
       plannedCreated: 0,
       heuristicChecked: 1,
-      heuristicCreated: 0
+      heuristicCreated: 0,
+      unexpectedPresenceChecked: 0,
+      unexpectedPresenceCreated: 0
     });
     expect(prisma.presumedAbsence.upsert).not.toHaveBeenCalled();
   });
@@ -131,10 +150,12 @@ describe("PresumedAbsenceService", () => {
       plannedChecked: 0,
       plannedCreated: 0,
       heuristicChecked: 1,
-      heuristicCreated: 1
+      heuristicCreated: 1,
+      unexpectedPresenceChecked: 0,
+      unexpectedPresenceCreated: 0
     });
     expect(prisma.presumedAbsence.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { employeeId_date: { employeeId: "employee-1", date: new Date(2026, 7, 10) } },
+      where: { employeeId_date_caseType: { employeeId: "employee-1", date: new Date(Date.UTC(2026, 7, 10)), caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE } },
       create: expect.objectContaining({
         employeeId: "employee-1",
         basis: "no_punch_heuristic",
@@ -171,10 +192,12 @@ describe("PresumedAbsenceService", () => {
       plannedChecked: 1,
       plannedCreated: 1,
       heuristicChecked: 0,
-      heuristicCreated: 0
+      heuristicCreated: 0,
+      unexpectedPresenceChecked: 0,
+      unexpectedPresenceCreated: 0
     });
     expect(prisma.presumedAbsence.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { employeeId_date: { employeeId: "planned-absent", date: new Date(2026, 7, 10) } },
+      where: { employeeId_date_caseType: { employeeId: "planned-absent", date: new Date(Date.UTC(2026, 7, 10)), caseType: PresumedAbsenceCaseType.PRESUMED_ABSENCE } },
       create: expect.objectContaining({
         employeeId: "planned-absent",
         basis: "daily_absence_report",
@@ -212,7 +235,9 @@ describe("PresumedAbsenceService", () => {
       plannedChecked: 1,
       plannedCreated: 1,
       heuristicChecked: 0,
-      heuristicCreated: 0
+      heuristicCreated: 0,
+      unexpectedPresenceChecked: 0,
+      unexpectedPresenceCreated: 0
     });
   });
 

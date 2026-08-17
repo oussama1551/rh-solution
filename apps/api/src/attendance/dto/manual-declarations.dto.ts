@@ -51,6 +51,16 @@ export class CreateSickLeaveDeclarationDto {
   note?: string;
 }
 
+export class UpdateSickLeaveDeclarationDto {
+  @IsDateString()
+  dateStart!: string;
+  @IsDateString()
+  dateEnd!: string;
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class CreateLeaveDeclarationDto {
   @IsUUID()
   employeeId!: string;
@@ -69,6 +79,21 @@ export class CreateLeaveDeclarationDto {
   @IsDateString()
   dateEnd!: string;
 
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class UpdateLeaveDeclarationDto {
+  @IsEnum(LeaveType)
+  leaveType!: LeaveType;
+  @IsOptional()
+  @IsEnum(ExceptionalLeaveReason)
+  exceptionalReason?: ExceptionalLeaveReason;
+  @IsDateString()
+  dateStart!: string;
+  @IsDateString()
+  dateEnd!: string;
   @IsOptional()
   @IsString()
   note?: string;

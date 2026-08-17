@@ -8,47 +8,48 @@ datasource db {
 }
 
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  username     String     @unique @db.VarChar(80)
-  email        String?    @unique @db.VarChar(180)
-  passwordHash String     @map("password_hash")
-  fullName     String     @map("full_name") @db.VarChar(180)
-  isActive     Boolean    @default(true) @map("is_active")
-  lastLoginAt  DateTime?  @map("last_login_at") @db.Timestamptz(6)
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  username     String    @unique @db.VarChar(80)
+  email        String?   @unique @db.VarChar(180)
+  passwordHash String    @map("password_hash")
+  fullName     String    @map("full_name") @db.VarChar(180)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  roles        UserRole[]
-  sessions     Session[]
-  auditLogs    AuditLog[]
-  reviewedAttendanceFlags AttendanceFlag[] @relation("AttendanceFlagReviewer")
-  createdAttendanceBlocks AttendanceBlock[] @relation("AttendanceBlockCreator")
-  employeeMappings EmployeeMapping[] @relation("EmployeeMappingMatcher")
-  createdShiftAssignments EmployeeShiftAssignment[]
-  submittedShiftAssignments EmployeeShiftAssignment[] @relation("EmployeeShiftAssignmentSubmitter")
-  reviewedShiftAssignments EmployeeShiftAssignment[] @relation("EmployeeShiftAssignmentReviewer")
-  createdGroups Group[] @relation("GroupCreator")
-  submittedGroups Group[] @relation("GroupSubmitter")
-  reviewedGroups Group[] @relation("GroupReviewer")
-  submittedMembershipChanges GroupMembershipChange[] @relation("MembershipChangeSubmitter")
-  reviewedMembershipChanges GroupMembershipChange[] @relation("MembershipChangeReviewer")
-  declaredOvertime OvertimeDeclaration[] @relation("OvertimeDeclarer")
-  approvedOvertime OvertimeDeclaration[] @relation("OvertimeApprover")
-  declaredCompensations AbsenceCompensation[] @relation("CompensationDeclarer")
-  approvedCompensations AbsenceCompensation[] @relation("CompensationApprover")
-  declaredSickLeaves SickLeaveDeclaration[] @relation("SickLeaveDeclarer")
-  declaredLeaves LeaveDeclaration[] @relation("LeaveDeclarer")
-  approvedLeaves LeaveDeclaration[] @relation("LeaveApprover")
-  declaredAbsenceReversals AbsenceReversalRequest[] @relation("AbsenceReversalDeclarer")
-  approvedAbsenceReversals AbsenceReversalRequest[] @relation("AbsenceReversalApprover")
-  reviewedPresumedAbsences PresumedAbsence[]
+  roles                          UserRole[]
+  sessions                       Session[]
+  auditLogs                      AuditLog[]
+  reviewedAttendanceFlags        AttendanceFlag[]                @relation("AttendanceFlagReviewer")
+  createdAttendanceBlocks        AttendanceBlock[]               @relation("AttendanceBlockCreator")
+  employeeMappings               EmployeeMapping[]               @relation("EmployeeMappingMatcher")
+  createdShiftAssignments        EmployeeShiftAssignment[]
+  submittedShiftAssignments      EmployeeShiftAssignment[]       @relation("EmployeeShiftAssignmentSubmitter")
+  reviewedShiftAssignments       EmployeeShiftAssignment[]       @relation("EmployeeShiftAssignmentReviewer")
+  createdGroups                  Group[]                         @relation("GroupCreator")
+  submittedGroups                Group[]                         @relation("GroupSubmitter")
+  reviewedGroups                 Group[]                         @relation("GroupReviewer")
+  submittedMembershipChanges     GroupMembershipChange[]         @relation("MembershipChangeSubmitter")
+  reviewedMembershipChanges      GroupMembershipChange[]         @relation("MembershipChangeReviewer")
+  declaredOvertime               OvertimeDeclaration[]           @relation("OvertimeDeclarer")
+  approvedOvertime               OvertimeDeclaration[]           @relation("OvertimeApprover")
+  declaredCompensations          AbsenceCompensation[]           @relation("CompensationDeclarer")
+  approvedCompensations          AbsenceCompensation[]           @relation("CompensationApprover")
+  declaredSickLeaves             SickLeaveDeclaration[]          @relation("SickLeaveDeclarer")
+  approvedSickLeaves             SickLeaveDeclaration[]          @relation("SickLeaveApprover")
+  declaredLeaves                 LeaveDeclaration[]              @relation("LeaveDeclarer")
+  approvedLeaves                 LeaveDeclaration[]              @relation("LeaveApprover")
+  declaredAbsenceReversals       AbsenceReversalRequest[]        @relation("AbsenceReversalDeclarer")
+  approvedAbsenceReversals       AbsenceReversalRequest[]        @relation("AbsenceReversalApprover")
+  reviewedPresumedAbsences       PresumedAbsence[]
   advancedTreatmentConfirmations AdvancedTreatmentConfirmation[] @relation("AdvancedTreatmentConfirmer")
-  advancedTreatmentFreezes AdvancedTreatmentFreeze[] @relation("AdvancedTreatmentFreezer")
-  subUnitAccess UserSubUnitAccess[]
-  notifications Notification[] @relation("NotificationRecipient")
-  createdChatConversations ChatConversation[] @relation("ChatConversationCreator")
-  chatParticipants ChatParticipant[]
-  sentChatMessages ChatMessage[] @relation("ChatMessageSender")
+  advancedTreatmentFreezes       AdvancedTreatmentFreeze[]       @relation("AdvancedTreatmentFreezer")
+  subUnitAccess                  UserSubUnitAccess[]
+  notifications                  Notification[]                  @relation("NotificationRecipient")
+  createdChatConversations       ChatConversation[]              @relation("ChatConversationCreator")
+  chatParticipants               ChatParticipant[]
+  sentChatMessages               ChatMessage[]                   @relation("ChatMessageSender")
 
   @@map("users")
 }
@@ -64,7 +65,7 @@ model Notification {
   isRead          Boolean          @default(false) @map("is_read")
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  recipient       User             @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipient User @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
 
   @@index([recipientUserId, isRead, createdAt])
   @@index([type])
@@ -73,13 +74,13 @@ model Notification {
 }
 
 model ChatConversation {
-  id           String               @id @default(uuid()) @db.Uuid
-  type         ChatConversationType
-  name         String?              @db.VarChar(160)
-  createdById  String?              @map("created_by") @db.Uuid
-  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  id          String               @id @default(uuid()) @db.Uuid
+  type        ChatConversationType
+  name        String?              @db.VarChar(160)
+  createdById String?              @map("created_by") @db.Uuid
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  createdBy    User?                @relation("ChatConversationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy    User?             @relation("ChatConversationCreator", fields: [createdById], references: [id], onDelete: SetNull)
   participants ChatParticipant[]
   messages     ChatMessage[]
 
@@ -89,13 +90,13 @@ model ChatConversation {
 }
 
 model ChatParticipant {
-  conversationId String           @map("conversation_id") @db.Uuid
-  userId         String           @map("user_id") @db.Uuid
-  joinedAt       DateTime         @default(now()) @map("joined_at") @db.Timestamptz(6)
-  lastReadAt     DateTime?        @map("last_read_at") @db.Timestamptz(6)
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  joinedAt       DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+  lastReadAt     DateTime? @map("last_read_at") @db.Timestamptz(6)
 
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([conversationId, userId])
   @@index([userId])
@@ -103,15 +104,15 @@ model ChatParticipant {
 }
 
 model ChatMessage {
-  id             String           @id @default(uuid()) @db.Uuid
-  conversationId String           @map("conversation_id") @db.Uuid
-  senderId       String?          @map("sender_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  senderId       String?   @map("sender_id") @db.Uuid
   content        String
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  editedAt       DateTime?        @map("edited_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  editedAt       DateTime? @map("edited_at") @db.Timestamptz(6)
 
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User?            @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User?            @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
   @@index([senderId])
@@ -119,11 +120,11 @@ model ChatMessage {
 }
 
 model Role {
-  id          String           @id @default(uuid()) @db.Uuid
-  code        String           @unique @db.VarChar(60)
-  name        String           @db.VarChar(120)
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(60)
+  name        String   @db.VarChar(120)
   description String?
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   users       UserRole[]
   permissions RolePermission[]
@@ -132,13 +133,13 @@ model Role {
 }
 
 model Permission {
-  id          String           @id @default(uuid()) @db.Uuid
-  code        String           @unique @db.VarChar(120)
-  module      String           @db.VarChar(80)
-  action      String           @db.VarChar(80)
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(120)
+  module      String  @db.VarChar(80)
+  action      String  @db.VarChar(80)
   description String?
 
-  roles       RolePermission[]
+  roles RolePermission[]
 
   @@map("permissions")
 }
@@ -148,33 +149,33 @@ model UserRole {
   roleId    String   @map("role_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
   @@map("user_roles")
 }
 
 model RolePermission {
-  roleId       String     @map("role_id") @db.Uuid
-  permissionId String     @map("permission_id") @db.Uuid
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
 
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
 }
 
 model Session {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  tokenHash  String    @map("token_hash")
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
 
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -194,7 +195,7 @@ model AuditLog {
   metadata   Json?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([action])
@@ -333,6 +334,13 @@ enum PresumedAbsenceStatus {
   @@map("presumed_absence_status")
 }
 
+enum PresumedAbsenceCaseType {
+  PRESUMED_ABSENCE
+  UNEXPECTED_PRESENCE_ON_REST
+
+  @@map("presumed_absence_case_type")
+}
+
 enum ChatConversationType {
   DIRECT
   GROUP
@@ -354,42 +362,42 @@ enum PayrollMapTarget {
 }
 
 model Employee {
-  id             String             @id @default(uuid()) @db.Uuid
-  zktecoId       String             @unique @map("zkteco_id") @db.VarChar(80)
-  groupId        String?            @map("group_id") @db.Uuid
-  biotimeCode    String?            @map("biotime_code") @db.VarChar(120)
-  localMatricule String?            @map("local_matricule") @db.VarChar(120)
-  employeeCode   String             @unique @map("employee_code") @db.VarChar(80)
-  fullName       String             @map("full_name") @db.VarChar(180)
-  department     String?            @db.VarChar(160)
-  phone          String?            @db.VarChar(80)
-  hireDate       DateTime?          @map("hire_date") @db.Date
-  resignedAt     DateTime?          @map("resigned_at") @db.Date
-  status         EmployeeStatus     @default(ACTIVE)
-  sourceUpdatedAt DateTime?         @map("source_updated_at") @db.Timestamptz(6)
-  sourcePayload   Json?             @map("source_payload")
-  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String         @id @default(uuid()) @db.Uuid
+  zktecoId        String         @unique @map("zkteco_id") @db.VarChar(80)
+  groupId         String?        @map("group_id") @db.Uuid
+  biotimeCode     String?        @map("biotime_code") @db.VarChar(120)
+  localMatricule  String?        @map("local_matricule") @db.VarChar(120)
+  employeeCode    String         @unique @map("employee_code") @db.VarChar(80)
+  fullName        String         @map("full_name") @db.VarChar(180)
+  department      String?        @db.VarChar(160)
+  phone           String?        @db.VarChar(80)
+  hireDate        DateTime?      @map("hire_date") @db.Date
+  resignedAt      DateTime?      @map("resigned_at") @db.Date
+  status          EmployeeStatus @default(ACTIVE)
+  sourceUpdatedAt DateTime?      @map("source_updated_at") @db.Timestamptz(6)
+  sourcePayload   Json?          @map("source_payload")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  shiftAssignments ShiftAssignment[]
-  attendancePunches AttendancePunch[]
-  attendanceBlocks  AttendanceBlock[]
-  resignRecords     ResignRecord[]
-  sapMappings       EmployeeMapping[]
-  sapDirectoryRecords SapEmployeeDirectory[]
-  group              Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  plannedShiftAssignments EmployeeShiftAssignment[]
-  groupMembershipChanges GroupMembershipChange[]
-  overtimeDeclarations OvertimeDeclaration[]
-  absenceCompensations AbsenceCompensation[]
-  sickLeaveDeclarations SickLeaveDeclaration[]
-  leaveDeclarations LeaveDeclaration[]
-  absenceReversalRequests AbsenceReversalRequest[]
-  annualLeaveBalances AnnualLeaveBalance[]
-  summaryRecords AttendanceSummaryRecord[]
-  presumedAbsences PresumedAbsence[]
+  shiftAssignments               ShiftAssignment[]
+  attendancePunches              AttendancePunch[]
+  attendanceBlocks               AttendanceBlock[]
+  resignRecords                  ResignRecord[]
+  sapMappings                    EmployeeMapping[]
+  sapDirectoryRecords            SapEmployeeDirectory[]
+  group                          Group?                          @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  plannedShiftAssignments        EmployeeShiftAssignment[]
+  groupMembershipChanges         GroupMembershipChange[]
+  overtimeDeclarations           OvertimeDeclaration[]
+  absenceCompensations           AbsenceCompensation[]
+  sickLeaveDeclarations          SickLeaveDeclaration[]
+  leaveDeclarations              LeaveDeclaration[]
+  absenceReversalRequests        AbsenceReversalRequest[]
+  annualLeaveBalances            AnnualLeaveBalance[]
+  summaryRecords                 AttendanceSummaryRecord[]
+  presumedAbsences               PresumedAbsence[]
   advancedTreatmentConfirmations AdvancedTreatmentConfirmation[]
-  advancedTreatmentFreezes AdvancedTreatmentFreeze[]
+  advancedTreatmentFreezes       AdvancedTreatmentFreeze[]
 
   @@index([groupId])
   @@index([status])
@@ -398,22 +406,25 @@ model Employee {
 }
 
 model PresumedAbsence {
-  id           String                 @id @default(uuid()) @db.Uuid
-  employeeId   String                 @map("employee_id") @db.Uuid
-  date         DateTime               @db.Date
-  detectedAt   DateTime               @default(now()) @map("detected_at") @db.Timestamptz(6)
-  basis        String                 @default("no_punch_heuristic") @db.VarChar(80)
-  status       PresumedAbsenceStatus  @default(PENDING_REVIEW)
-  reviewedById String?                @map("reviewed_by") @db.Uuid
-  reviewedAt   DateTime?              @map("reviewed_at") @db.Timestamptz(6)
-  reviewNote   String?                @map("review_note")
+  id           String                  @id @default(uuid()) @db.Uuid
+  employeeId   String                  @map("employee_id") @db.Uuid
+  date         DateTime                @db.Date
+  detectedAt   DateTime                @default(now()) @map("detected_at") @db.Timestamptz(6)
+  basis        String                  @default("no_punch_heuristic") @db.VarChar(80)
+  caseType     PresumedAbsenceCaseType @default(PRESUMED_ABSENCE) @map("case_type")
+  message      String?
+  status       PresumedAbsenceStatus   @default(PENDING_REVIEW)
+  reviewedById String?                 @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime?               @map("reviewed_at") @db.Timestamptz(6)
+  reviewNote   String?                 @map("review_note")
 
-  employee     Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  reviewedBy   User?                  @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewedBy User?    @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  @@unique([employeeId, date])
+  @@unique([employeeId, date, caseType])
   @@index([date])
   @@index([status])
+  @@index([caseType])
   @@index([reviewedById])
   @@map("presumed_absences")
 }
@@ -442,8 +453,8 @@ model AdvancedTreatmentConfirmation {
   createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee      Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  confirmedBy   User?                      @relation("AdvancedTreatmentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  confirmedBy User?    @relation("AdvancedTreatmentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
 
   @@unique([employeeId, periodStart, periodEnd])
   @@index([periodStart, periodEnd])
@@ -461,8 +472,8 @@ model AdvancedTreatmentFreeze {
   frozenAt    DateTime @default(now()) @map("frozen_at") @db.Timestamptz(6)
   reason      String?
 
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  frozenBy    User?    @relation("AdvancedTreatmentFreezer", fields: [frozenById], references: [id], onDelete: SetNull)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  frozenBy User?    @relation("AdvancedTreatmentFreezer", fields: [frozenById], references: [id], onDelete: SetNull)
 
   @@unique([employeeId, periodStart, periodEnd])
   @@index([periodStart, periodEnd])
@@ -471,17 +482,17 @@ model AdvancedTreatmentFreeze {
 }
 
 model ShiftDefinition {
-  id             String    @id @default(uuid()) @db.Uuid
-  shiftType      ShiftType @unique @map("shift_type")
-  label          String    @db.VarChar(80)
-  startTime      String?   @map("start_time") @db.VarChar(5)
-  endTime        String?   @map("end_time") @db.VarChar(5)
-  spansMidnight  Boolean   @default(false) @map("spans_midnight")
-  marginMinutes  Int       @default(90) @map("margin_minutes")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String    @id @default(uuid()) @db.Uuid
+  shiftType     ShiftType @unique @map("shift_type")
+  label         String    @db.VarChar(80)
+  startTime     String?   @map("start_time") @db.VarChar(5)
+  endTime       String?   @map("end_time") @db.VarChar(5)
+  spansMidnight Boolean   @default(false) @map("spans_midnight")
+  marginMinutes Int       @default(90) @map("margin_minutes")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  assignments    EmployeeShiftAssignment[]
+  assignments EmployeeShiftAssignment[]
 
   @@map("shift_definitions")
 }
@@ -504,12 +515,12 @@ model EmployeeShiftAssignment {
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee          Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  shiftDefinition   ShiftDefinition    @relation(fields: [shiftDefinitionId], references: [id], onDelete: Restrict)
-  sourceGroup       Group?             @relation(fields: [sourceGroupId], references: [id], onDelete: SetNull)
-  createdBy         User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  submittedBy       User?              @relation("EmployeeShiftAssignmentSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
-  reviewedBy        User?              @relation("EmployeeShiftAssignmentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftDefinition ShiftDefinition @relation(fields: [shiftDefinitionId], references: [id], onDelete: Restrict)
+  sourceGroup     Group?          @relation(fields: [sourceGroupId], references: [id], onDelete: SetNull)
+  createdBy       User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  submittedBy     User?           @relation("EmployeeShiftAssignmentSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy      User?           @relation("EmployeeShiftAssignmentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@unique([employeeId, date, status])
   @@index([date])
@@ -521,33 +532,33 @@ model EmployeeShiftAssignment {
 }
 
 model Unit {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String    @db.VarChar(120)
-  code        String    @unique @db.VarChar(80)
-  description String?
-  isSouthWilaya Boolean @default(false) @map("is_south_wilaya")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(120)
+  code          String   @unique @db.VarChar(80)
+  description   String?
+  isSouthWilaya Boolean  @default(false) @map("is_south_wilaya")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  subUnits    SubUnit[]
+  subUnits SubUnit[]
 
   @@index([name])
   @@map("units")
 }
 
 model SubUnit {
-  id          String    @id @default(uuid()) @db.Uuid
-  unitId      String    @map("unit_id") @db.Uuid
-  name        String    @db.VarChar(160)
-  description String?
-  isSouthWilaya Boolean @default(false) @map("is_south_wilaya")
-  biotimeDepartmentCode String? @map("biotime_department_code") @db.VarChar(120)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                    String   @id @default(uuid()) @db.Uuid
+  unitId                String   @map("unit_id") @db.Uuid
+  name                  String   @db.VarChar(160)
+  description           String?
+  isSouthWilaya         Boolean  @default(false) @map("is_south_wilaya")
+  biotimeDepartmentCode String?  @map("biotime_department_code") @db.VarChar(120)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  groups      Group[]
-  userAccess  UserSubUnitAccess[]
+  unit       Unit                @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  groups     Group[]
+  userAccess UserSubUnitAccess[]
 
   @@unique([unitId, name])
   @@index([name])
@@ -560,8 +571,8 @@ model UserSubUnitAccess {
   subUnitId String   @map("sub_unit_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subUnit   SubUnit  @relation(fields: [subUnitId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subUnit SubUnit @relation(fields: [subUnitId], references: [id], onDelete: Cascade)
 
   @@id([userId, subUnitId])
   @@index([subUnitId])
@@ -569,31 +580,31 @@ model UserSubUnitAccess {
 }
 
 model Group {
-  id          String    @id @default(uuid()) @db.Uuid
-  subUnitId   String    @map("sub_unit_id") @db.Uuid
-  name        String    @db.VarChar(160)
-  description String?
-  createdById String?   @map("created_by_id") @db.Uuid
-  status      ApprovalStatus @default(APPROVED)
-  submittedById String?   @map("submitted_by_id") @db.Uuid
-  submittedAt DateTime?   @map("submitted_at") @db.Timestamptz(6)
-  reviewedById String?    @map("reviewed_by_id") @db.Uuid
-  reviewedAt  DateTime?   @map("reviewed_at") @db.Timestamptz(6)
-  rejectionReason String? @map("rejection_reason")
-  pendingName String?     @map("pending_name") @db.VarChar(160)
-  pendingDescription String? @map("pending_description")
-  pendingDeleteRequested Boolean @default(false) @map("pending_delete_requested")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String         @id @default(uuid()) @db.Uuid
+  subUnitId              String         @map("sub_unit_id") @db.Uuid
+  name                   String         @db.VarChar(160)
+  description            String?
+  createdById            String?        @map("created_by_id") @db.Uuid
+  status                 ApprovalStatus @default(APPROVED)
+  submittedById          String?        @map("submitted_by_id") @db.Uuid
+  submittedAt            DateTime?      @map("submitted_at") @db.Timestamptz(6)
+  reviewedById           String?        @map("reviewed_by_id") @db.Uuid
+  reviewedAt             DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  rejectionReason        String?        @map("rejection_reason")
+  pendingName            String?        @map("pending_name") @db.VarChar(160)
+  pendingDescription     String?        @map("pending_description")
+  pendingDeleteRequested Boolean        @default(false) @map("pending_delete_requested")
+  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  subUnit     SubUnit   @relation(fields: [subUnitId], references: [id], onDelete: Cascade)
-  createdBy   User?     @relation("GroupCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  submittedBy User?     @relation("GroupSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
-  reviewedBy  User?     @relation("GroupReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  employees   Employee[]
+  subUnit                 SubUnit                   @relation(fields: [subUnitId], references: [id], onDelete: Cascade)
+  createdBy               User?                     @relation("GroupCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  submittedBy             User?                     @relation("GroupSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy              User?                     @relation("GroupReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  employees               Employee[]
   plannedShiftAssignments EmployeeShiftAssignment[]
-  membershipChangesFrom GroupMembershipChange[] @relation("MembershipChangeFromGroup")
-  membershipChangesTo GroupMembershipChange[] @relation("MembershipChangeToGroup")
+  membershipChangesFrom   GroupMembershipChange[]   @relation("MembershipChangeFromGroup")
+  membershipChangesTo     GroupMembershipChange[]   @relation("MembershipChangeToGroup")
 
   @@unique([subUnitId, name])
   @@index([name])
@@ -616,11 +627,11 @@ model GroupMembershipChange {
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee        Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  fromGroup       Group?         @relation("MembershipChangeFromGroup", fields: [fromGroupId], references: [id], onDelete: SetNull)
-  toGroup         Group?         @relation("MembershipChangeToGroup", fields: [toGroupId], references: [id], onDelete: SetNull)
-  submittedBy     User?          @relation("MembershipChangeSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
-  reviewedBy      User?          @relation("MembershipChangeReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  fromGroup   Group?   @relation("MembershipChangeFromGroup", fields: [fromGroupId], references: [id], onDelete: SetNull)
+  toGroup     Group?   @relation("MembershipChangeToGroup", fields: [toGroupId], references: [id], onDelete: SetNull)
+  submittedBy User?    @relation("MembershipChangeSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy  User?    @relation("MembershipChangeReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId])
   @@index([fromGroupId])
@@ -630,23 +641,23 @@ model GroupMembershipChange {
 }
 
 model OvertimeDeclaration {
-  id           String         @id @default(uuid()) @db.Uuid
-  employeeId   String         @map("employee_id") @db.Uuid
-  date         DateTime       @db.Date
-  hours        Decimal        @db.Decimal(6, 2)
+  id           String           @id @default(uuid()) @db.Uuid
+  employeeId   String           @map("employee_id") @db.Uuid
+  date         DateTime         @db.Date
+  hours        Decimal          @db.Decimal(6, 2)
   rateType     OvertimeRateType @map("rate_type")
-  ratePercent  Decimal        @map("rate_percent") @db.Decimal(5, 2)
+  ratePercent  Decimal          @map("rate_percent") @db.Decimal(5, 2)
   reason       String?
-  declaredById String?        @map("declared_by") @db.Uuid
-  status       ApprovalStatus @default(PENDING_APPROVAL)
-  approvedById String?        @map("approved_by") @db.Uuid
-  approvedAt   DateTime?      @map("approved_at") @db.Timestamptz(6)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  declaredById String?          @map("declared_by") @db.Uuid
+  status       ApprovalStatus   @default(PENDING_APPROVAL)
+  approvedById String?          @map("approved_by") @db.Uuid
+  approvedAt   DateTime?        @map("approved_at") @db.Timestamptz(6)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  declaredBy   User?          @relation("OvertimeDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-  approvedBy   User?          @relation("OvertimeApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  declaredBy User?    @relation("OvertimeDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("OvertimeApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, date])
   @@index([status])
@@ -666,9 +677,9 @@ model AbsenceCompensation {
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee         Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  declaredBy       User?          @relation("CompensationDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-  approvedBy       User?          @relation("CompensationApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  declaredBy User?    @relation("CompensationDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("CompensationApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, absenceDate])
   @@index([employeeId, compensationDate])
@@ -684,35 +695,39 @@ model SickLeaveDeclaration {
   note         String?
   declaredById String?        @map("declared_by") @db.Uuid
   status       ApprovalStatus @default(APPROVED)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  declaredBy   User?          @relation("SickLeaveDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-
-  @@index([employeeId, dateStart, dateEnd])
-  @@index([status])
-  @@map("sick_leave_declarations")
-}
-
-model LeaveDeclaration {
-  id           String         @id @default(uuid()) @db.Uuid
-  employeeId   String         @map("employee_id") @db.Uuid
-  dateStart    DateTime       @map("date_start") @db.Date
-  dateEnd      DateTime       @map("date_end") @db.Date
-  leaveType    LeaveType      @default(ANNUEL) @map("leave_type")
-  exceptionalReason ExceptionalLeaveReason? @map("exceptional_reason")
-  note         String?
-  declaredById String?        @map("declared_by") @db.Uuid
-  status       ApprovalStatus @default(PENDING_APPROVAL)
   approvedById String?        @map("approved_by") @db.Uuid
   approvedAt   DateTime?      @map("approved_at") @db.Timestamptz(6)
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  declaredBy   User?          @relation("LeaveDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-  approvedBy   User?          @relation("LeaveApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  declaredBy User?    @relation("SickLeaveDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("SickLeaveApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, dateStart, dateEnd])
+  @@index([status])
+  @@index([approvedById])
+  @@map("sick_leave_declarations")
+}
+
+model LeaveDeclaration {
+  id                String                  @id @default(uuid()) @db.Uuid
+  employeeId        String                  @map("employee_id") @db.Uuid
+  dateStart         DateTime                @map("date_start") @db.Date
+  dateEnd           DateTime                @map("date_end") @db.Date
+  leaveType         LeaveType               @default(ANNUEL) @map("leave_type")
+  exceptionalReason ExceptionalLeaveReason? @map("exceptional_reason")
+  note              String?
+  declaredById      String?                 @map("declared_by") @db.Uuid
+  status            ApprovalStatus          @default(PENDING_APPROVAL)
+  approvedById      String?                 @map("approved_by") @db.Uuid
+  approvedAt        DateTime?               @map("approved_at") @db.Timestamptz(6)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  declaredBy User?    @relation("LeaveDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("LeaveApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, dateStart, dateEnd])
   @@index([leaveType])
@@ -732,7 +747,7 @@ model AnnualLeaveBalance {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, year])
   @@index([year])
@@ -751,9 +766,9 @@ model AbsenceReversalRequest {
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee     Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  declaredBy   User?          @relation("AbsenceReversalDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
-  approvedBy   User?          @relation("AbsenceReversalApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  declaredBy User?    @relation("AbsenceReversalDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("AbsenceReversalApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, absenceDate])
   @@index([status])
@@ -761,26 +776,27 @@ model AbsenceReversalRequest {
 }
 
 model AttendanceSummaryRecord {
-  id             String                  @id @default(uuid()) @db.Uuid
-  employeeId     String                  @map("employee_id") @db.Uuid
-  workDate       DateTime                @map("work_date") @db.Date
-  status         AttendanceSummaryStatus
-  workedHours    Decimal                 @default(0) @map("worked_hours") @db.Decimal(7, 2)
-  overtimeHours  Decimal                 @default(0) @map("overtime_hours") @db.Decimal(7, 2)
-  overtimeHoursRate50  Decimal           @default(0) @map("overtime_hours_rate_50") @db.Decimal(7, 2)
-  overtimeHoursRate75  Decimal           @default(0) @map("overtime_hours_rate_75") @db.Decimal(7, 2)
-  overtimeHoursRate100 Decimal           @default(0) @map("overtime_hours_rate_100") @db.Decimal(7, 2)
-  isCompensation Boolean                 @default(false) @map("is_compensation")
-  leaveType      LeaveType?              @map("leave_type")
-  exceptionalReason ExceptionalLeaveReason? @map("exceptional_reason")
-  shiftType      ShiftType?              @map("shift_type")
-  generatedAt    DateTime                @default(now()) @map("generated_at") @db.Timestamptz(6)
-  periodStart    DateTime                @map("period_start") @db.Date
-  periodEnd      DateTime                @map("period_end") @db.Date
-  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String                  @id @default(uuid()) @db.Uuid
+  employeeId           String                  @map("employee_id") @db.Uuid
+  workDate             DateTime                @map("work_date") @db.Date
+  status               AttendanceSummaryStatus
+  workedHours          Decimal                 @default(0) @map("worked_hours") @db.Decimal(7, 2)
+  overtimeHours        Decimal                 @default(0) @map("overtime_hours") @db.Decimal(7, 2)
+  overtimeHoursRate50  Decimal                 @default(0) @map("overtime_hours_rate_50") @db.Decimal(7, 2)
+  overtimeHoursRate75  Decimal                 @default(0) @map("overtime_hours_rate_75") @db.Decimal(7, 2)
+  overtimeHoursRate100 Decimal                 @default(0) @map("overtime_hours_rate_100") @db.Decimal(7, 2)
+  isCompensation       Boolean                 @default(false) @map("is_compensation")
+  leaveType            LeaveType?              @map("leave_type")
+  exceptionalReason    ExceptionalLeaveReason? @map("exceptional_reason")
+  shiftType            ShiftType?              @map("shift_type")
+  generatedAt          DateTime                @default(now()) @map("generated_at") @db.Timestamptz(6)
+  periodStart          DateTime                @map("period_start") @db.Date
+  periodEnd            DateTime                @map("period_end") @db.Date
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee       Employee                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
   @@unique([employeeId, workDate, periodStart, periodEnd])
   @@index([periodStart, periodEnd])
   @@index([status])
@@ -803,20 +819,20 @@ model PayrollRubricMapping {
 }
 
 model PayrollImportLine {
-  id           String               @id @default(uuid()) @db.Uuid
-  period       String               @db.VarChar(40)
-  company      String               @db.VarChar(80)
-  sapMatricule String               @map("sap_matricule") @db.VarChar(120)
-  lastName     String?              @map("last_name") @db.VarChar(160)
-  firstName    String?              @map("first_name") @db.VarChar(160)
-  rubricCode   String               @map("rubric_code") @db.VarChar(80)
-  rubricLabel  String?              @map("rubric_label") @db.VarChar(240)
-  base         Decimal              @default(0) @db.Decimal(12, 2)
-  amount       Decimal              @default(0) @db.Decimal(14, 2)
-  rawPayload   Json?                @map("raw_payload")
-  importedAt   DateTime             @default(now()) @map("imported_at") @db.Timestamptz(6)
+  id           String   @id @default(uuid()) @db.Uuid
+  period       String   @db.VarChar(40)
+  company      String   @db.VarChar(80)
+  sapMatricule String   @map("sap_matricule") @db.VarChar(120)
+  lastName     String?  @map("last_name") @db.VarChar(160)
+  firstName    String?  @map("first_name") @db.VarChar(160)
+  rubricCode   String   @map("rubric_code") @db.VarChar(80)
+  rubricLabel  String?  @map("rubric_label") @db.VarChar(240)
+  base         Decimal  @default(0) @db.Decimal(12, 2)
+  amount       Decimal  @default(0) @db.Decimal(14, 2)
+  rawPayload   Json?    @map("raw_payload")
+  importedAt   DateTime @default(now()) @map("imported_at") @db.Timestamptz(6)
 
-  mapping      PayrollRubricMapping @relation(fields: [rubricCode], references: [rubricCode], onDelete: Restrict)
+  mapping PayrollRubricMapping @relation(fields: [rubricCode], references: [rubricCode], onDelete: Restrict)
 
   @@index([period])
   @@index([period, sapMatricule])
@@ -826,25 +842,25 @@ model PayrollImportLine {
 }
 
 model SapEmployeeDirectory {
-  id              String    @id @default(uuid()) @db.Uuid
-  sapEmpId        String    @unique @map("sap_emp_id") @db.VarChar(160)
-  sapCompany      String    @map("sap_company") @db.VarChar(80)
-  biotimeId       String?   @map("biotime_id") @db.VarChar(80)
-  employeeId      String?   @map("employee_id") @db.Uuid
-  lastName        String?   @map("last_name") @db.VarChar(160)
-  firstName       String?   @map("first_name") @db.VarChar(160)
-  fullName        String    @map("full_name") @db.VarChar(240)
-  poste           String?   @db.VarChar(180)
-  structure       String?   @db.VarChar(180)
-  hireDate        DateTime? @map("hire_date") @db.Date
-  mobile          String?   @db.VarChar(80)
-  bankAccount     String?   @map("bank_account") @db.VarChar(120)
-  rawPayload      Json?     @map("raw_payload")
-  lastSyncedAt    DateTime  @default(now()) @map("last_synced_at") @db.Timestamptz(6)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  sapEmpId     String    @unique @map("sap_emp_id") @db.VarChar(160)
+  sapCompany   String    @map("sap_company") @db.VarChar(80)
+  biotimeId    String?   @map("biotime_id") @db.VarChar(80)
+  employeeId   String?   @map("employee_id") @db.Uuid
+  lastName     String?   @map("last_name") @db.VarChar(160)
+  firstName    String?   @map("first_name") @db.VarChar(160)
+  fullName     String    @map("full_name") @db.VarChar(240)
+  poste        String?   @db.VarChar(180)
+  structure    String?   @db.VarChar(180)
+  hireDate     DateTime? @map("hire_date") @db.Date
+  mobile       String?   @db.VarChar(80)
+  bankAccount  String?   @map("bank_account") @db.VarChar(120)
+  rawPayload   Json?     @map("raw_payload")
+  lastSyncedAt DateTime  @default(now()) @map("last_synced_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee        Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   @@index([sapCompany])
   @@index([biotimeId])
@@ -884,8 +900,8 @@ model EmployeeMapping {
   createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee          Employee              @relation(fields: [biotimeEmployeeId], references: [id], onDelete: Cascade)
-  matchedBy         User?                 @relation("EmployeeMappingMatcher", fields: [matchedById], references: [id], onDelete: SetNull)
+  employee  Employee @relation(fields: [biotimeEmployeeId], references: [id], onDelete: Cascade)
+  matchedBy User?    @relation("EmployeeMappingMatcher", fields: [matchedById], references: [id], onDelete: SetNull)
 
   @@unique([biotimeEmployeeId, sapEmpId])
   @@index([biotimeEmployeeId, status])
@@ -895,37 +911,37 @@ model EmployeeMapping {
 }
 
 model Shift {
-  id                     String            @id @default(uuid()) @db.Uuid
-  code                   String            @unique @db.VarChar(80)
-  name                   String            @db.VarChar(160)
-  startTime              String            @map("start_time") @db.VarChar(5)
-  endTime                String            @map("end_time") @db.VarChar(5)
-  spansMidnight          Boolean           @map("spans_midnight")
-  applicableDays         DayOfWeek[]       @map("applicable_days")
-  toleranceBeforeMinutes Int               @default(15) @map("tolerance_before_minutes")
-  toleranceAfterMinutes  Int               @default(15) @map("tolerance_after_minutes")
-  isActive               Boolean           @default(true) @map("is_active")
-  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String      @id @default(uuid()) @db.Uuid
+  code                   String      @unique @db.VarChar(80)
+  name                   String      @db.VarChar(160)
+  startTime              String      @map("start_time") @db.VarChar(5)
+  endTime                String      @map("end_time") @db.VarChar(5)
+  spansMidnight          Boolean     @map("spans_midnight")
+  applicableDays         DayOfWeek[] @map("applicable_days")
+  toleranceBeforeMinutes Int         @default(15) @map("tolerance_before_minutes")
+  toleranceAfterMinutes  Int         @default(15) @map("tolerance_after_minutes")
+  isActive               Boolean     @default(true) @map("is_active")
+  createdAt              DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  assignments            ShiftAssignment[]
-  attendancePunches      AttendancePunch[]
+  assignments       ShiftAssignment[]
+  attendancePunches AttendancePunch[]
 
   @@index([isActive])
   @@map("shifts")
 }
 
 model ShiftAssignment {
-  id          String    @id @default(uuid()) @db.Uuid
-  employeeId  String    @map("employee_id") @db.Uuid
-  shiftId     String    @map("shift_id") @db.Uuid
-  validFrom   DateTime  @map("valid_from") @db.Date
-  validTo     DateTime? @map("valid_to") @db.Date
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id         String    @id @default(uuid()) @db.Uuid
+  employeeId String    @map("employee_id") @db.Uuid
+  shiftId    String    @map("shift_id") @db.Uuid
+  validFrom  DateTime  @map("valid_from") @db.Date
+  validTo    DateTime? @map("valid_to") @db.Date
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  shift       Shift     @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift    @relation(fields: [shiftId], references: [id], onDelete: Restrict)
 
   @@index([employeeId, validFrom, validTo])
   @@index([shiftId])
@@ -933,24 +949,24 @@ model ShiftAssignment {
 }
 
 model AttendancePunch {
-  id             String           @id @default(uuid()) @db.Uuid
-  employeeId     String           @map("employee_id") @db.Uuid
-  shiftId        String?          @map("shift_id") @db.Uuid
-  zktecoPunchId  String?          @unique @map("zkteco_punch_id") @db.VarChar(120)
-  biotimeId      String?          @unique @map("biotime_id") @db.VarChar(120)
-  punchTime      DateTime         @map("punch_time") @db.Timestamptz(6)
-  sourceUploadedAt DateTime?      @map("source_uploaded_at") @db.Timestamptz(6)
-  direction      PunchDirection   @default(UNKNOWN)
-  shiftDate      DateTime?        @map("shift_date") @db.Date
-  shiftStatus    PunchShiftStatus @default(UNMATCHED) @map("shift_status")
+  id               String           @id @default(uuid()) @db.Uuid
+  employeeId       String           @map("employee_id") @db.Uuid
+  shiftId          String?          @map("shift_id") @db.Uuid
+  zktecoPunchId    String?          @unique @map("zkteco_punch_id") @db.VarChar(120)
+  biotimeId        String?          @unique @map("biotime_id") @db.VarChar(120)
+  punchTime        DateTime         @map("punch_time") @db.Timestamptz(6)
+  sourceUploadedAt DateTime?        @map("source_uploaded_at") @db.Timestamptz(6)
+  direction        PunchDirection   @default(UNKNOWN)
+  shiftDate        DateTime?        @map("shift_date") @db.Date
+  shiftStatus      PunchShiftStatus @default(UNMATCHED) @map("shift_status")
   countsAsPresence Boolean          @default(true) @map("counts_as_presence")
-  rawPayload      Json?            @map("raw_payload")
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  rawPayload       Json?            @map("raw_payload")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee       Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  shift          Shift?           @relation(fields: [shiftId], references: [id], onDelete: SetNull)
-  flags          AttendanceFlag[]
+  employee Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift?           @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  flags    AttendanceFlag[]
 
   @@index([employeeId, punchTime])
   @@index([sourceUploadedAt])
@@ -991,19 +1007,19 @@ enum DeviceStatus {
 }
 
 model AttendanceFlag {
-  id             String               @id @default(uuid()) @db.Uuid
-  punchId        String               @map("punch_id") @db.Uuid
-  type           AttendanceFlagType
-  status         AttendanceFlagStatus @default(PENDING)
-  reason         String?
-  reviewNote     String?              @map("review_note")
-  reviewedById   String?              @map("reviewed_by_id") @db.Uuid
-  reviewedAt     DateTime?            @map("reviewed_at") @db.Timestamptz(6)
-  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String               @id @default(uuid()) @db.Uuid
+  punchId      String               @map("punch_id") @db.Uuid
+  type         AttendanceFlagType
+  status       AttendanceFlagStatus @default(PENDING)
+  reason       String?
+  reviewNote   String?              @map("review_note")
+  reviewedById String?              @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?            @map("reviewed_at") @db.Timestamptz(6)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  punch          AttendancePunch      @relation(fields: [punchId], references: [id], onDelete: Cascade)
-  reviewedBy     User?                @relation("AttendanceFlagReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  punch      AttendancePunch @relation(fields: [punchId], references: [id], onDelete: Cascade)
+  reviewedBy User?           @relation("AttendanceFlagReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@unique([punchId, type])
   @@index([status, type])
@@ -1012,21 +1028,21 @@ model AttendanceFlag {
 }
 
 model AttendanceBlock {
-  id           String                @id @default(uuid()) @db.Uuid
-  employeeId   String                @map("employee_id") @db.Uuid
-  startsAt     DateTime              @map("starts_at") @db.Timestamptz(6)
-  endsAt       DateTime              @map("ends_at") @db.Timestamptz(6)
-  status       AttendanceBlockStatus @default(SCHEDULED)
-  reason       String
-  createdById  String?               @map("created_by_id") @db.Uuid
-  activatedAt  DateTime?             @map("activated_at") @db.Timestamptz(6)
-  completedAt  DateTime?             @map("completed_at") @db.Timestamptz(6)
-  cancelledAt  DateTime?             @map("cancelled_at") @db.Timestamptz(6)
-  createdAt    DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          String                @id @default(uuid()) @db.Uuid
+  employeeId  String                @map("employee_id") @db.Uuid
+  startsAt    DateTime              @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime              @map("ends_at") @db.Timestamptz(6)
+  status      AttendanceBlockStatus @default(SCHEDULED)
+  reason      String
+  createdById String?               @map("created_by_id") @db.Uuid
+  activatedAt DateTime?             @map("activated_at") @db.Timestamptz(6)
+  completedAt DateTime?             @map("completed_at") @db.Timestamptz(6)
+  cancelledAt DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee     Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdBy    User?                 @relation("AttendanceBlockCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("AttendanceBlockCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, startsAt, endsAt])
   @@index([status])
@@ -1034,19 +1050,19 @@ model AttendanceBlock {
 }
 
 model Device {
-  id           String       @id @default(uuid()) @db.Uuid
-  zktecoId     String       @unique @map("zkteco_id") @db.VarChar(120)
-  biotimeId    String?      @unique @map("biotime_id") @db.VarChar(120)
-  serialNumber String?      @unique @map("serial_number") @db.VarChar(120)
-  name         String       @db.VarChar(160)
-  ipAddress    String?      @map("ip_address") @db.Inet
-  area         String?      @db.VarChar(160)
-  status       DeviceStatus @default(UNKNOWN)
-  lastSeenAt   DateTime?    @map("last_seen_at") @db.Timestamptz(6)
-  sourceUpdatedAt DateTime? @map("source_updated_at") @db.Timestamptz(6)
-  sourcePayload Json?       @map("source_payload")
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String       @id @default(uuid()) @db.Uuid
+  zktecoId        String       @unique @map("zkteco_id") @db.VarChar(120)
+  biotimeId       String?      @unique @map("biotime_id") @db.VarChar(120)
+  serialNumber    String?      @unique @map("serial_number") @db.VarChar(120)
+  name            String       @db.VarChar(160)
+  ipAddress       String?      @map("ip_address") @db.Inet
+  area            String?      @db.VarChar(160)
+  status          DeviceStatus @default(UNKNOWN)
+  lastSeenAt      DateTime?    @map("last_seen_at") @db.Timestamptz(6)
+  sourceUpdatedAt DateTime?    @map("source_updated_at") @db.Timestamptz(6)
+  sourcePayload   Json?        @map("source_payload")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([status])
   @@index([lastSeenAt])
@@ -1062,18 +1078,18 @@ enum SyncStatus {
 }
 
 model ResignRecord {
-  id              String    @id @default(uuid()) @db.Uuid
-  biotimeId       String    @unique @map("biotime_id") @db.VarChar(120)
-  employeeId      String?   @map("employee_id") @db.Uuid
-  employeeZktecoId String?  @map("employee_zkteco_id") @db.VarChar(80)
-  resignDate      DateTime? @map("resign_date") @db.Date
-  reason          String?
-  sourceUpdatedAt DateTime? @map("source_updated_at") @db.Timestamptz(6)
-  sourcePayload   Json?     @map("source_payload")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String    @id @default(uuid()) @db.Uuid
+  biotimeId        String    @unique @map("biotime_id") @db.VarChar(120)
+  employeeId       String?   @map("employee_id") @db.Uuid
+  employeeZktecoId String?   @map("employee_zkteco_id") @db.VarChar(80)
+  resignDate       DateTime? @map("resign_date") @db.Date
+  reason           String?
+  sourceUpdatedAt  DateTime? @map("source_updated_at") @db.Timestamptz(6)
+  sourcePayload    Json?     @map("source_payload")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  employee        Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   @@index([employeeZktecoId])
   @@index([resignDate])

@@ -14,7 +14,7 @@ import { useApi } from "../lib/useApi";
 export function ValidationPage() {
   const flags = useApi<AttendanceFlag[]>("/api/attendance/flags/pending", []);
   const approvals = useApi<PlanningApprovals>("/api/attendance/planning-approvals", { groups: [], plannings: [], memberships: [] });
-  const declarations = useApi<ManualDeclarationApprovals>("/api/attendance/declarations/pending", { overtime: [], compensations: [], leaves: [], absenceReversals: [] });
+  const declarations = useApi<ManualDeclarationApprovals>("/api/attendance/declarations/pending", { overtime: [], compensations: [], sickLeaves: [], leaves: [], absenceReversals: [] });
   const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<"planning" | "declarations" | "attendance">("planning");
   const [dayPreview, setDayPreview] = useState<{ employeeId: string; employeeName: string; date: string } | null>(null);
@@ -72,13 +72,13 @@ export function ValidationPage() {
     approvals.reload();
   }
 
-  async function approveDeclaration(type: "overtime" | "compensations" | "leaves" | "absence-reversals", id: string) {
+  async function approveDeclaration(type: "overtime" | "compensations" | "sick-leaves" | "leaves" | "absence-reversals", id: string) {
     await api(`/api/attendance/declarations/${type}/${id}/approve`, { method: "PATCH" });
     setMessage("Déclaration approuvée.");
     declarations.reload();
   }
 
-  async function rejectDeclaration(type: "overtime" | "compensations" | "leaves" | "absence-reversals", id: string, reason: string) {
+  async function rejectDeclaration(type: "overtime" | "compensations" | "sick-leaves" | "leaves" | "absence-reversals", id: string, reason: string) {
     await api(`/api/attendance/declarations/${type}/${id}/reject`, { method: "PATCH", body: JSON.stringify({ reason }) });
     setMessage("Déclaration rejetée.");
     declarations.reload();
@@ -257,6 +257,22 @@ export function ValidationPage() {
                     <Button variant="danger" onClick={() => openRejectModal("Rejeter l'annulation d'absence", `${row.employee.fullName} - absence ${new Date(row.absenceDate).toLocaleDateString("fr-FR")}`, reason => rejectDeclaration("absence-reversals", row.id, reason))}><X size={15} /> Rejeter</Button>
                   </div>
                 ) }
+              ]}
+            />
+            <div className="panel-header">
+              <h2>Maladies en attente</h2>
+              <span className="muted">{declarations.data.sickLeaves.length} demande(s)</span>
+            </div>
+            <DataTable
+              rows={declarations.data.sickLeaves}
+              empty="Aucune maladie en attente."
+              columns={[
+                { key: "employee", header: "Employé", render: row => <strong>{row.employee.fullName}</strong>, sortValue: row => row.employee.fullName },
+                { key: "start", header: "Du", render: row => new Date(row.dateStart).toLocaleDateString("fr-FR"), sortValue: row => row.dateStart },
+                { key: "end", header: "Au", render: row => new Date(row.dateEnd).toLocaleDateString("fr-FR"), sortValue: row => row.dateEnd },
+                { key: "note", header: "Note", render: row => row.note || "-" },
+                { key: "by", header: "Déclaré par", render: row => row.declaredBy?.fullName || row.declaredBy?.username || "-" },
+                { key: "actions", header: "Actions", render: row => <div className="row-actions"><Button variant="primary" onClick={() => approveDeclaration("sick-leaves", row.id)}><Check size={15} /> Approuver</Button><Button variant="danger" onClick={() => openRejectModal("Rejeter la maladie", `${row.employee.fullName} - du ${new Date(row.dateStart).toLocaleDateString("fr-FR")}`, reason => rejectDeclaration("sick-leaves", row.id, reason))}><X size={15} /> Rejeter</Button></div> }
               ]}
             />
             <div className="panel-header">

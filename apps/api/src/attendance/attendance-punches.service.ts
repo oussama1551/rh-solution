@@ -223,7 +223,7 @@ export class AttendancePunchesService {
 
   async employeeMonthlyCalendar(employeeId: string, month: string, actor?: RequestUser, from?: string, to?: string) {
     const range = resolveRange({ month, from, to });
-    const [rawDays, summaryRecords, employeeFallback, liveDeclarations, fallbackPunches] = await Promise.all([
+    const [rawDays, summaryRecords, employeeFallback, liveDeclarations, fallbackPunches, planningAssignments] = await Promise.all([
       this.buildDailyRows({ employeeId }, range, actor),
       this.prisma.attendanceSummaryRecord.findMany({
         where: {
@@ -239,7 +239,20 @@ export class AttendancePunchesService {
         select: employeeCalendarSelect()
       }),
       this.loadCalendarDeclarations(employeeId, range),
-      this.loadPunchesForDaily({ employeeId }, range.from, range.to, actor)
+      this.loadPunchesForDaily({ employeeId }, range.from, range.to, actor),
+      this.prisma.employeeShiftAssignment.findMany({
+        where: {
+          employeeId,
+          date: { gte: parseDateKey(range.fromKey), lte: parseDateKey(range.toKey) },
+          status: ApprovalStatus.APPROVED,
+          ...shiftAssignmentEmployeeScopeWhere(actor)
+        },
+        include: {
+          shiftDefinition: true,
+          sourceGroup: { select: { id: true, name: true } }
+        },
+        orderBy: { date: "asc" }
+      })
     ]);
     const fallbackDays = this.summarizeDaily(fallbackPunches, range.fromKey, range.toKey)
       .map(day => ({
@@ -288,6 +301,15 @@ export class AttendancePunchesService {
         days: datesBetween(range.fromKey, range.toKey)
       },
       days,
+      planning: planningAssignments.map(assignment => ({
+        date: localDateKey(assignment.date),
+        shiftType: assignment.shiftDefinition.shiftType,
+        label: assignment.shiftDefinition.label,
+        startTime: assignment.shiftDefinition.startTime,
+        endTime: assignment.shiftDefinition.endTime,
+        assignedVia: assignment.assignedVia,
+        sourceGroupName: assignment.sourceGroup?.name || null
+      })),
       totals: {
         workedDays: days.filter(day => day.firstPunchTime && day.lastPunchTime).length,
         totalHours: roundHours(days.reduce((sum, day) => sum + day.workedHours, 0)),

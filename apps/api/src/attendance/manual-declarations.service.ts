@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ApprovalStatus, ExceptionalLeaveReason, LeaveType, NotificationType, Prisma } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { employeeScopeWhere } from "../common/employee-scope";
@@ -6,7 +6,7 @@ import { RequestUser } from "../common/request-user.type";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { RoleCode } from "../roles/role-codes";
-import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
+import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, UpdateLeaveDeclarationDto, UpdateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
 
 @Injectable()
 export class ManualDeclarationsService {
@@ -119,6 +119,7 @@ export class ManualDeclarationsService {
     this.ensureSickLeaveDeclarer(actor);
     if (dto.dateEnd < dto.dateStart) throw new BadRequestException("La date de fin doit être après la date de début.");
     await this.ensureEmployeeVisible(dto.employeeId, actor);
+    const approval = this.approvalFor(actor);
     const row = await this.prisma.sickLeaveDeclaration.create({
       data: {
         employeeId: dto.employeeId,
@@ -126,12 +127,11 @@ export class ManualDeclarationsService {
         dateEnd: parseDate(dto.dateEnd),
         note: dto.note?.trim() || null,
         declaredById: actor.id,
-        status: ApprovalStatus.APPROVED
+        status: approval.status,
+        approvedById: approval.status === ApprovalStatus.APPROVED ? actor.id : null,
+        approvedAt: approval.status === ApprovalStatus.APPROVED ? new Date() : null
       },
-      include: {
-        employee: { select: { id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true } },
-        declaredBy: { select: { id: true, username: true, fullName: true } }
-      }
+      include: this.sickLeaveDeclarationInclude()
     });
     await this.audit.record({ userId: actor.id, action: "sick_leave.create", entityType: "sick_leave_declaration", entityId: row.id, after: row as Prisma.InputJsonValue });
     await this.notifications.notify(await this.notifications.adminDrhUserIds(), NotificationType.SICK_LEAVE_DECLARED, {
@@ -150,7 +150,7 @@ export class ManualDeclarationsService {
     const leaveType = dto.leaveType || LeaveType.ANNUEL;
     const exceptionalReason = leaveType === LeaveType.EXCEPTIONNEL ? dto.exceptionalReason || null : null;
     await this.validateLeaveRules(dto.employeeId, parseDate(dto.dateStart), parseDate(dto.dateEnd), leaveType, exceptionalReason, dto.note, actor);
-    const approval = this.approvalForLeave(actor);
+    const approval = this.approvalFor(actor);
     const row = await this.prisma.leaveDeclaration.create({
       data: {
         employeeId: dto.employeeId,
@@ -194,13 +194,14 @@ export class ManualDeclarationsService {
   }
 
   async pendingApprovals() {
-    const [overtime, compensations, leaves, absenceReversals] = await Promise.all([
+    const [overtime, compensations, sickLeaves, leaves, absenceReversals] = await Promise.all([
       this.prisma.overtimeDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.declarationInclude() }),
       this.prisma.absenceCompensation.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.declarationInclude() }),
+      this.prisma.sickLeaveDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.sickLeaveDeclarationInclude() }),
       this.prisma.leaveDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.leaveDeclarationInclude() }),
       this.prisma.absenceReversalRequest.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.absenceReversalInclude() })
     ]);
-    return { overtime, compensations, leaves, absenceReversals };
+    return { overtime, compensations, sickLeaves, leaves, absenceReversals };
   }
 
   async listOvertime(actor: RequestUser, employeeId?: string) {
@@ -240,10 +241,7 @@ export class ManualDeclarationsService {
       where,
       orderBy: [{ dateStart: "desc" }, { createdAt: "desc" }],
       take: 300,
-      include: {
-        employee: { select: { id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true, department: true } },
-        declaredBy: { select: { id: true, username: true, fullName: true } }
-      }
+      include: this.sickLeaveDeclarationInclude()
     });
   }
 
@@ -260,6 +258,27 @@ export class ManualDeclarationsService {
     await this.prisma.sickLeaveDeclaration.delete({ where: { id } });
     await this.audit.record({ userId: actor.id, action: "sick_leave.delete", entityType: "sick_leave_declaration", entityId: id, before: row as Prisma.InputJsonValue });
     return { ok: true };
+  }
+
+  async updateSickLeave(id: string, dto: UpdateSickLeaveDeclarationDto, actor: RequestUser) {
+    const before = await this.prisma.sickLeaveDeclaration.findUnique({ where: { id }, include: this.sickLeaveDeclarationInclude() });
+    if (!before) throw new NotFoundException("Declaration maladie introuvable.");
+    this.ensureOwner(before.declaredById, actor);
+    if (dto.dateEnd < dto.dateStart) throw new BadRequestException("La date de fin doit etre apres la date de debut.");
+    await this.ensureEmployeeVisible(before.employeeId, actor);
+    const approval = this.approvalFor(actor);
+    const row = await this.prisma.sickLeaveDeclaration.update({
+      where: { id },
+      data: {
+        dateStart: parseDate(dto.dateStart), dateEnd: parseDate(dto.dateEnd), note: dto.note?.trim() || null,
+        status: approval.status, approvedById: approval.status === ApprovalStatus.APPROVED ? actor.id : null,
+        approvedAt: approval.status === ApprovalStatus.APPROVED ? new Date() : null
+      },
+      include: this.sickLeaveDeclarationInclude()
+    });
+    await this.audit.record({ userId: actor.id, action: "sick_leave.update", entityType: "sick_leave_declaration", entityId: id, before: before as Prisma.InputJsonValue, after: row as Prisma.InputJsonValue });
+    if (row.status === ApprovalStatus.PENDING_APPROVAL) await this.notifyPending(row, "Maladie modifiee a valider", "sick_leave_declaration");
+    return row;
   }
 
   async listLeaves(actor: RequestUser, employeeId?: string) {
@@ -298,6 +317,34 @@ export class ManualDeclarationsService {
     });
     await this.audit.record({ userId: actor.id, action: "leave.delete", entityType: "leave_declaration", entityId: id, before: row as Prisma.InputJsonValue });
     return { ok: true };
+  }
+
+  async updateLeave(id: string, dto: UpdateLeaveDeclarationDto, actor: RequestUser) {
+    const before = await this.prisma.leaveDeclaration.findUnique({ where: { id }, include: this.leaveDeclarationInclude() });
+    if (!before) throw new NotFoundException("Declaration conge introuvable.");
+    this.ensureOwner(before.declaredById, actor);
+    if (dto.dateEnd < dto.dateStart) throw new BadRequestException("La date de fin doit etre apres la date de debut.");
+    await this.ensureEmployeeVisible(before.employeeId, actor);
+    const dateStart = parseDate(dto.dateStart);
+    const dateEnd = parseDate(dto.dateEnd);
+    const exceptionalReason = dto.leaveType === LeaveType.EXCEPTIONNEL ? dto.exceptionalReason || null : null;
+    await this.validateLeaveRules(before.employeeId, dateStart, dateEnd, dto.leaveType, exceptionalReason, dto.note, actor, id);
+    const approval = this.approvalFor(actor);
+    const row = await this.prisma.leaveDeclaration.update({
+      where: { id },
+      data: {
+        dateStart, dateEnd, leaveType: dto.leaveType, exceptionalReason, note: dto.note?.trim() || null,
+        status: approval.status, approvedById: approval.status === ApprovalStatus.APPROVED ? actor.id : null,
+        approvedAt: approval.status === ApprovalStatus.APPROVED ? new Date() : null
+      },
+      include: this.leaveDeclarationInclude()
+    });
+    const balanceStart = before.dateStart < dateStart ? before.dateStart : dateStart;
+    const balanceEnd = before.dateEnd > dateEnd ? before.dateEnd : dateEnd;
+    await this.recalculateAnnualLeaveBalances(before.employeeId, balanceStart, balanceEnd);
+    await this.audit.record({ userId: actor.id, action: "leave.update", entityType: "leave_declaration", entityId: id, before: before as Prisma.InputJsonValue, after: row as Prisma.InputJsonValue });
+    if (row.status === ApprovalStatus.PENDING_APPROVAL) await this.notifyPending(row, "Conge modifie a valider", "leave_declaration");
+    return row;
   }
 
   async listAbsenceReversals(actor: RequestUser, employeeId?: string) {
@@ -341,6 +388,16 @@ export class ManualDeclarationsService {
     return this.approve("leave", id, actor);
   }
 
+  approveSickLeave(id: string, actor: RequestUser) {
+    this.ensureApprover(actor);
+    return this.approve("sick_leave", id, actor);
+  }
+
+  rejectSickLeave(id: string, reason: string | undefined, actor: RequestUser) {
+    this.ensureApprover(actor);
+    return this.reject("sick_leave", id, reason, actor);
+  }
+
   rejectLeave(id: string, reason: string | undefined, actor: RequestUser) {
     this.ensureApprover(actor);
     return this.reject("leave", id, reason, actor);
@@ -356,18 +413,20 @@ export class ManualDeclarationsService {
     return this.reject("absence_reversal", id, reason, actor);
   }
 
-  private async approve(type: "overtime" | "compensation" | "leave" | "absence_reversal", id: string, actor: RequestUser) {
+  private async approve(type: "overtime" | "compensation" | "sick_leave" | "leave" | "absence_reversal", id: string, actor: RequestUser) {
     const model = type === "overtime"
       ? this.prisma.overtimeDeclaration
       : type === "compensation"
         ? this.prisma.absenceCompensation
+        : type === "sick_leave"
+          ? this.prisma.sickLeaveDeclaration
         : type === "leave"
           ? this.prisma.leaveDeclaration
           : this.prisma.absenceReversalRequest;
     const row = await (model as any).update({
       where: { id },
       data: { status: ApprovalStatus.APPROVED, approvedById: actor.id, approvedAt: new Date() },
-      include: type === "leave" ? this.leaveDeclarationInclude() : type === "absence_reversal" ? this.absenceReversalInclude() : this.declarationInclude()
+      include: type === "sick_leave" ? this.sickLeaveDeclarationInclude() : type === "leave" ? this.leaveDeclarationInclude() : type === "absence_reversal" ? this.absenceReversalInclude() : this.declarationInclude()
     }).catch(() => null);
     if (!row) throw new NotFoundException("Déclaration introuvable.");
     if (type === "leave" && row.leaveType === LeaveType.ANNUEL) {
@@ -383,11 +442,13 @@ export class ManualDeclarationsService {
     return row;
   }
 
-  private async reject(type: "overtime" | "compensation" | "leave" | "absence_reversal", id: string, reason: string | undefined, actor: RequestUser) {
+  private async reject(type: "overtime" | "compensation" | "sick_leave" | "leave" | "absence_reversal", id: string, reason: string | undefined, actor: RequestUser) {
     const model = type === "overtime"
       ? this.prisma.overtimeDeclaration
       : type === "compensation"
         ? this.prisma.absenceCompensation
+        : type === "sick_leave"
+          ? this.prisma.sickLeaveDeclaration
         : type === "leave"
           ? this.prisma.leaveDeclaration
           : this.prisma.absenceReversalRequest;
@@ -397,11 +458,11 @@ export class ManualDeclarationsService {
       approvedAt: new Date()
     };
     if (type === "overtime" && reason) data.reason = reason;
-    if ((type === "compensation" || type === "leave") && reason) data.note = reason;
+    if ((type === "compensation" || type === "sick_leave" || type === "leave") && reason) data.note = reason;
     const row = await (model as any).update({
       where: { id },
       data,
-      include: type === "leave" ? this.leaveDeclarationInclude() : type === "absence_reversal" ? this.absenceReversalInclude() : this.declarationInclude()
+      include: type === "sick_leave" ? this.sickLeaveDeclarationInclude() : type === "leave" ? this.leaveDeclarationInclude() : type === "absence_reversal" ? this.absenceReversalInclude() : this.declarationInclude()
     }).catch(() => null);
     if (!row) throw new NotFoundException("Déclaration introuvable.");
     if (type === "leave" && row.leaveType === LeaveType.ANNUEL) {
@@ -420,11 +481,6 @@ export class ManualDeclarationsService {
   private approvalFor(actor: RequestUser) {
     const roles = new Set(actor.roles);
     return { status: roles.has(RoleCode.Admin) || roles.has(RoleCode.DRH) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING_APPROVAL };
-  }
-
-  private approvalForLeave(actor: RequestUser) {
-    const roles = new Set(actor.roles);
-    return { status: roles.has(RoleCode.Admin) || roles.has(RoleCode.DRH) || roles.has(RoleCode.GRH) ? ApprovalStatus.APPROVED : ApprovalStatus.PENDING_APPROVAL };
   }
 
   private ensureOvertimeOrCompensationDeclarer(actor: RequestUser) {
@@ -460,6 +516,10 @@ export class ManualDeclarationsService {
     if (!roles.has(RoleCode.Admin) && !roles.has(RoleCode.DRH)) {
       throw new BadRequestException("Seul un Admin ou un DRH peut approuver/rejeter.");
     }
+  }
+
+  private ensureOwner(declaredById: string | null, actor: RequestUser) {
+    if (declaredById !== actor.id) throw new ForbiddenException("Seul le createur peut modifier cette declaration.");
   }
 
   private ensureAdmin(actor: RequestUser) {
@@ -500,7 +560,15 @@ export class ManualDeclarationsService {
     } as const;
   }
 
-  private async validateLeaveRules(employeeId: string, dateStart: Date, dateEnd: Date, leaveType: LeaveType, exceptionalReason: ExceptionalLeaveReason | null, note: string | undefined, actor: RequestUser) {
+  private sickLeaveDeclarationInclude() {
+    return {
+      employee: { select: { id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true, department: true } },
+      declaredBy: { select: { id: true, username: true, fullName: true } },
+      approvedBy: { select: { id: true, username: true, fullName: true } }
+    } as const;
+  }
+
+  private async validateLeaveRules(employeeId: string, dateStart: Date, dateEnd: Date, leaveType: LeaveType, exceptionalReason: ExceptionalLeaveReason | null, note: string | undefined, actor: RequestUser, excludeId?: string) {
     const duration = daysInclusive(dateStart, dateEnd);
     const canOverride = this.canOverrideSensitiveLeaveRule(actor) && Boolean(note?.trim());
     if (leaveType === LeaveType.EXCEPTIONNEL && !exceptionalReason) {
@@ -515,6 +583,7 @@ export class ManualDeclarationsService {
     if (leaveType === LeaveType.EXCEPTIONNEL && exceptionalReason === ExceptionalLeaveReason.HAJJ) {
       const existing = await this.prisma.leaveDeclaration.count({
         where: {
+          ...(excludeId ? { id: { not: excludeId } } : {}),
           employeeId,
           leaveType: LeaveType.EXCEPTIONNEL,
           exceptionalReason: ExceptionalLeaveReason.HAJJ,
@@ -532,6 +601,7 @@ export class ManualDeclarationsService {
         const yearEnd = new Date(Date.UTC(year, 11, 31));
         const existing = await this.prisma.leaveDeclaration.findMany({
           where: {
+            ...(excludeId ? { id: { not: excludeId } } : {}),
             employeeId,
             leaveType: LeaveType.SANS_SOLDE,
             status: ApprovalStatus.APPROVED,
@@ -611,6 +681,12 @@ export class ManualDeclarationsService {
     } as const;
   }
 
+  private async notifyPending(row: { id: string; employee: { fullName: string } }, title: string, entityType: string) {
+    await this.notifications.notify(await this.notifications.adminDrhUserIds(), NotificationType.PENDING_APPROVAL, {
+      title, message: row.employee.fullName, entityType, entityId: row.id
+    });
+  }
+
 }
 
 function parseDate(value: string) {
@@ -649,9 +725,10 @@ function ratePercent(rateType: string) {
   return 50;
 }
 
-function declarationTypeLabel(type: "overtime" | "compensation" | "leave" | "absence_reversal") {
+function declarationTypeLabel(type: "overtime" | "compensation" | "sick_leave" | "leave" | "absence_reversal") {
   if (type === "overtime") return "Heures supplémentaires";
   if (type === "leave") return "Congé";
+  if (type === "sick_leave") return "Maladie";
   if (type === "absence_reversal") return "Annulation d'absence sans preuve de pointage";
   return "Compensation";
 }

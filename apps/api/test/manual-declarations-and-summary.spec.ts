@@ -1,4 +1,4 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { validate } from "class-validator";
 import { ApprovalStatus, AttendanceSummaryStatus, ExceptionalLeaveReason, LeaveType, Prisma } from "@prisma/client";
 import { CreateAbsenceReversalRequestDto, CreateOvertimeDeclarationDto } from "../src/attendance/dto/manual-declarations.dto";
@@ -16,7 +16,12 @@ function declarationsService() {
       findFirst: jest.fn().mockResolvedValue({ id: "emp-1" }),
       findUnique: jest.fn().mockResolvedValue({ id: "emp-1", group: { subUnit: { isSouthWilaya: false, unit: { isSouthWilaya: false } } } })
     },
-    sickLeaveDeclaration: { create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "sick-1", ...data })), findUnique: jest.fn(), delete: jest.fn() },
+    sickLeaveDeclaration: {
+      create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "sick-1", ...data, employee: { id: data.employeeId, fullName: "Employé Test" } })),
+      findUnique: jest.fn(),
+      update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "sick-1", employeeId: "emp-1", declaredById: "grh", employee: { id: "emp-1", fullName: "Employé Test" }, ...data })),
+      delete: jest.fn()
+    },
     leaveDeclaration: {
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "leave-1", ...data, employee: { id: data.employeeId, fullName: "Employé Test" }, declaredBy: null, approvedBy: null })),
       findMany: jest.fn().mockResolvedValue([]),
@@ -48,11 +53,16 @@ function declarationsService() {
 }
 
 describe("ManualDeclarationsService", () => {
-  it("allows GRH/Admin/DRH to declare sick leave and rejects a responsable", async () => {
+  it("keeps GRH sickness pending, auto-approves Admin/DRH and rejects a responsable", async () => {
     const { service, prisma } = declarationsService();
     await service.createSickLeave({ employeeId: "emp-1", dateStart: "2026-07-01", dateEnd: "2026-07-02" }, grh as any);
     expect(prisma.sickLeaveDeclaration.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: ApprovalStatus.APPROVED, declaredById: "grh" })
+      data: expect.objectContaining({ status: ApprovalStatus.PENDING_APPROVAL, approvedById: null, declaredById: "grh" })
+    }));
+
+    await service.createSickLeave({ employeeId: "emp-1", dateStart: "2026-07-01", dateEnd: "2026-07-02" }, admin as any);
+    expect(prisma.sickLeaveDeclaration.create).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: ApprovalStatus.APPROVED, approvedById: "admin" })
     }));
 
     await expect(service.createSickLeave({ employeeId: "emp-1", dateStart: "2026-07-01", dateEnd: "2026-07-02" }, manager as any))
@@ -73,18 +83,27 @@ describe("ManualDeclarationsService", () => {
     }));
   });
 
-  it("approves congé for GRH and keeps responsable congé pending", async () => {
+  it("keeps GRH and responsable congé pending", async () => {
     const { service, prisma } = declarationsService();
 
     await service.createLeave({ employeeId: "emp-1", dateStart: "2026-07-30", dateEnd: "2026-07-30" }, grh as any);
     expect(prisma.leaveDeclaration.create).toHaveBeenLastCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: ApprovalStatus.APPROVED, approvedById: "grh" })
+      data: expect.objectContaining({ status: ApprovalStatus.PENDING_APPROVAL, approvedById: null })
     }));
 
     await service.createLeave({ employeeId: "emp-1", dateStart: "2026-07-31", dateEnd: "2026-07-31" }, manager as any);
     expect(prisma.leaveDeclaration.create).toHaveBeenLastCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: ApprovalStatus.PENDING_APPROVAL, approvedById: null })
     }));
+  });
+
+  it("lets the creator edit sickness and sends a GRH edit back to approval", async () => {
+    const { service, prisma } = declarationsService();
+    prisma.sickLeaveDeclaration.findUnique.mockResolvedValue({ id: "sick-1", employeeId: "emp-1", declaredById: "grh", dateStart: new Date("2026-07-01"), dateEnd: new Date("2026-07-02"), employee: { id: "emp-1", fullName: "Employé Test" } });
+    await service.updateSickLeave("sick-1", { dateStart: "2026-07-02", dateEnd: "2026-07-03", note: "Corrigé" }, grh as any);
+    expect(prisma.sickLeaveDeclaration.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: ApprovalStatus.PENDING_APPROVAL, approvedById: null }) }));
+
+    await expect(service.updateSickLeave("sick-1", { dateStart: "2026-07-02", dateEnd: "2026-07-03" }, manager as any)).rejects.toThrow(ForbiddenException);
   });
 
   it("rejects exceptional leave longer than 3 days for a responsable", async () => {
