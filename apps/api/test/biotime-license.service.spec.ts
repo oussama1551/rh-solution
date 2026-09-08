@@ -24,13 +24,9 @@ describe("BioTimeLicenseService", () => {
     };
   }
 
-  it("réactive la licence avec login web, CSRF et upload multipart", async () => {
-    const get = jest.fn()
-      .mockResolvedValueOnce({ data: '<input type="hidden" name="csrfmiddlewaretoken" value="login-csrf">' })
-      .mockResolvedValueOnce({ data: '<input type="hidden" name="csrfmiddlewaretoken" value="activation-csrf">' });
-    const post = jest.fn()
-      .mockResolvedValueOnce({ data: { ret: 0 } })
-      .mockResolvedValueOnce({ data: "<html>Activation Réussie</html>" });
+  it("réactive la licence hors ligne avant tout login web", async () => {
+    const get = jest.fn().mockResolvedValueOnce({ data: '<input type="hidden" name="csrfmiddlewaretoken" value="activation-csrf">' });
+    const post = jest.fn().mockResolvedValueOnce({ data: "<html>Activation Réussie</html>" });
     const audit = { record: jest.fn().mockResolvedValue({}) };
     const service = new BioTimeLicenseService(
       config({
@@ -46,12 +42,8 @@ describe("BioTimeLicenseService", () => {
     const result = await service.reactivate();
 
     expect(result.success).toBe(true);
-    expect(get).toHaveBeenNthCalledWith(1, "/login/");
-    expect(post).toHaveBeenNthCalledWith(1, "/login/", expect.stringContaining("username=admin"), expect.objectContaining({
-      headers: expect.objectContaining({ "X-CSRFToken": "login-csrf" })
-    }));
-    expect(get).toHaveBeenNthCalledWith(2, "/offlineActivation/");
-    expect(post).toHaveBeenNthCalledWith(2, "/offlineActivation/", expect.anything(), expect.objectContaining({
+    expect(get).toHaveBeenCalledWith("/offlineActivation/");
+    expect(post).toHaveBeenCalledWith("/offlineActivation/", expect.anything(), expect.objectContaining({
       headers: expect.objectContaining({ "X-CSRFToken": "activation-csrf" })
     }));
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
@@ -60,7 +52,7 @@ describe("BioTimeLicenseService", () => {
     }));
   });
 
-  it("journalise et remonte un échec de login web", async () => {
+  it("journalise et remonte un refus d'activation BioTime", async () => {
     const service = new BioTimeLicenseService(
       config({
         BIOTIME_BASE_URL: "http://biotime.local",
@@ -71,10 +63,22 @@ describe("BioTimeLicenseService", () => {
       { record: jest.fn().mockResolvedValue({}) } as never,
       () => ({
         get: jest.fn().mockResolvedValue({ data: '<input type="hidden" name="csrfmiddlewaretoken" value="login-csrf">' }),
-        post: jest.fn().mockResolvedValue({ data: { ret: 1, message: "invalid credentials" } })
+        post: jest.fn().mockResolvedValue({ data: "<html><body>Invalid license file</body></html>" })
       } as never)
     );
 
-    await expect(service.reactivate()).rejects.toThrow("Login web BioTime refusé");
+    await expect(service.reactivate()).rejects.toThrow("Invalid license file");
+  });
+
+  it("reconnaît la réponse JSON Successfully Activated de BioTime", async () => {
+    const service = new BioTimeLicenseService(
+      config({ BIOTIME_BASE_URL: "http://biotime.local", BIOTIME_USERNAME: "admin", BIOTIME_PASSWORD: "secret", BIOTIME_LICENSE_FILE_PATH: filePath }) as never,
+      { record: jest.fn().mockResolvedValue({}) } as never,
+      () => ({
+        get: jest.fn().mockResolvedValue({ data: '<input type="hidden" name="csrfmiddlewaretoken" value="activation-csrf">' }),
+        post: jest.fn().mockResolvedValue({ data: { message: "Successfully Activated" } })
+      } as never)
+    );
+    await expect(service.reactivate()).resolves.toEqual(expect.objectContaining({ success: true }));
   });
 });

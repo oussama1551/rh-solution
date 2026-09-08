@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query } from "@nestjs/common";
+import { BadGatewayException, Controller, Get, Post, Query } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Permissions } from "../auth/decorators/permissions.decorator";
 import { RequestUser } from "../common/request-user.type";
@@ -33,8 +33,12 @@ export class SyncController {
 
   @Post("reactivate-biotime-license")
   @Permissions(PermissionCode.SyncRun)
-  reactivateLicense() {
-    return this.license.reactivate();
+  async reactivateLicense() {
+    try {
+      return await this.license.reactivate();
+    } catch (error) {
+      throw new BadGatewayException(error instanceof Error ? error.message : "Réactivation licence BioTime impossible.");
+    }
   }
 
   @Post("backfill-punches")

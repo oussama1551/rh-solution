@@ -39,7 +39,7 @@ export function SyncAdminPage() {
       state.reload();
       logs.reload();
     } catch (error) {
-      setLicenseError(error instanceof Error ? error.message : String(error));
+      setLicenseError(readApiMessage(error));
     } finally {
       setReactivatingLicense(false);
     }
@@ -116,4 +116,14 @@ export function SyncAdminPage() {
       </section>
     </>
   );
+}
+
+function readApiMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error);
+  try {
+    const parsed = JSON.parse(raw) as { message?: string | string[] };
+    return Array.isArray(parsed.message) ? parsed.message.join(" ") : parsed.message || raw;
+  } catch {
+    return raw;
+  }
 }

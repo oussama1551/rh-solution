@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Cron } from "@nestjs/schedule";
 import axios, { AxiosInstance } from "axios";
 import FormData = require("form-data");
 import { createReadStream, existsSync } from "node:fs";
@@ -27,6 +28,21 @@ export class BioTimeLicenseService {
     private readonly clientFactory?: LicenseHttpClientFactory
   ) {}
 
+  @Cron(process.env.BIOTIME_LICENSE_CRON || "30 8 * * *", {
+    name: "biotime-license-daily-reactivation",
+    timeZone: process.env.BIOTIME_LICENSE_TIMEZONE || "Europe/Paris"
+  })
+  async scheduledReactivation() {
+    this.logger.log("Début tentative réactivation licence BioTime automatique (08:30 Europe/Paris).");
+    try {
+      const result = await this.reactivate();
+      this.logger.log(`Réactivation licence BioTime automatique réussie à ${result.activatedAt.toISOString()}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Réactivation licence BioTime automatique échouée sans interrompre le serveur: ${message}`);
+    }
+  }
+
   async reactivate(): Promise<BioTimeLicenseResult> {
     const activatedAt = new Date();
 
@@ -34,38 +50,21 @@ export class BioTimeLicenseService {
       const jar = new CookieJar();
       const client = this.createClient(jar);
       const licenseFilePath = this.required("BIOTIME_LICENSE_FILE_PATH");
+      this.logger.log(`Chemin fichier licence BioTime utilisé: ${licenseFilePath}`);
 
       if (!existsSync(licenseFilePath)) {
         throw new Error(`Fichier licence BioTime introuvable: ${licenseFilePath}`);
       }
 
-      const loginPage = await client.get<string>(this.loginPath());
-      const loginCsrf = this.extractCsrf(loginPage.data, jar);
-      const loginPayload = new URLSearchParams({
-        username: this.required("BIOTIME_USERNAME"),
-        password: this.required("BIOTIME_PASSWORD"),
-        login_type: "pwd"
-      });
-
-      const loginResponse = await client.post(this.loginPath(), loginPayload.toString(), {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-CSRFToken": loginCsrf,
-          Referer: this.absoluteUrl(this.loginPath())
-        }
-      });
-      const loginData = loginResponse.data;
-      if (loginData && typeof loginData === "object" && "ret" in loginData && Number(loginData.ret) !== 0) {
-        throw new Error(`Login web BioTime refusé: ${String(loginData.message || "ret != 0")}`);
-      }
-
+      // BioTime laisse cette page accessible lorsque la licence inactive bloque précisément le login.
+      // L'activation hors ligne doit donc être tentée avant toute authentification web.
       const activationPage = await client.get<string>(this.activationPath());
       const activationCsrf = this.extractCsrf(activationPage.data, jar);
       const form = new FormData();
       form.append("csrfmiddlewaretoken", activationCsrf);
       form.append("license_file", createReadStream(licenseFilePath), basename(licenseFilePath));
 
-      const activationResponse = await client.post<string>(this.activationPath(), form, {
+      const activationResponse = await client.post<unknown>(this.activationPath(), form, {
         headers: {
           ...form.getHeaders(),
           "X-CSRFToken": activationCsrf,
@@ -74,9 +73,9 @@ export class BioTimeLicenseService {
         maxBodyLength: Infinity
       });
 
-      const html = String(activationResponse.data || "");
-      if (!this.isSuccessResponse(html)) {
-        throw new Error("Réactivation BioTime non confirmée par la réponse HTML.");
+      const activationData = activationResponse.data;
+      if (!this.isSuccessResponse(activationData)) {
+        throw new Error(`Réactivation BioTime refusée: ${this.extractResponseMessage(activationData)}`);
       }
 
       const result = {
@@ -145,12 +144,30 @@ export class BioTimeLicenseService {
     throw new Error("Token CSRF BioTime introuvable.");
   }
 
-  private isSuccessResponse(html: string) {
-    const normalized = html.toLowerCase();
+  private isSuccessResponse(payload: unknown) {
+    if (payload && typeof payload === "object") {
+      const data = payload as Record<string, unknown>;
+      if (data.success === true || data.status === true) return true;
+      if ("ret" in data && Number(data.ret) === 0) return true;
+      const message = String(data.message ?? data.msg ?? data.detail ?? "").toLowerCase();
+      if (message.includes("successfully activated") || message.includes("activation successful") || message.includes("activation réussie") || message.includes("activation reussie")) return true;
+    }
+    const normalized = String(payload || "").toLowerCase();
     return normalized.includes("activation réussie")
       || normalized.includes("activation reussie")
       || normalized.includes("activation successful")
       || normalized.includes("success");
+  }
+
+  private extractResponseMessage(payload: unknown) {
+    if (payload && typeof payload === "object") {
+      const data = payload as Record<string, unknown>;
+      const message = data.message ?? data.msg ?? data.detail ?? data.error;
+      if (message) return String(message).slice(0, 500);
+      return JSON.stringify(data).slice(0, 500);
+    }
+    const text = String(payload || "").replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return text.slice(0, 500) || "réponse BioTime sans confirmation de succès";
   }
 
   private async recordAudit(result: BioTimeLicenseResult) {
