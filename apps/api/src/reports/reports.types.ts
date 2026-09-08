@@ -169,6 +169,8 @@ export type SummaryReportRow = {
   absenceReversedDays: number;
   restDays: number;
   incompleteDays: number;
+  contractNotStartedDays: number;
+  contractEndedDays: number;
   totalWorkedHours: number;
   totalOvertimeHours: number;
   overtimeHoursRate50: number;
@@ -179,8 +181,9 @@ export type SummaryReportRow = {
 
 export type SummaryDailyRecordRow = {
   id: string;
+  employeeId: string;
   workDate: string;
-  status: "PRESENT" | "ABSENT" | "SICK" | "LEAVE" | "ACCIDENT" | "COMPENSATED" | "ABSENCE_REVERSED" | "REST" | "INCOMPLETE";
+  status: "PRESENT" | "ABSENT" | "SICK" | "LEAVE" | "ACCIDENT" | "COMPENSATED" | "ABSENCE_REVERSED" | "REST" | "INCOMPLETE" | "CONTRACT_NOT_STARTED" | "CONTRACT_ENDED";
   workedHours: number;
   overtimeHours: number;
   overtimeHoursRate50: number;

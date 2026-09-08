@@ -1,7 +1,10 @@
 import { EmployeeStatus } from "@prisma/client";
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from "class-validator";
+import { IsDateString, IsEnum, IsIn, IsOptional, IsString, IsUUID } from "class-validator";
 
 export class ReportsQueryDto {
+  @IsOptional()
+  @IsIn(["summary", "detailed"])
+  mode?: "summary" | "detailed";
   @IsDateString()
   startDate!: string;
 

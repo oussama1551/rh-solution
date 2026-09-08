@@ -7,9 +7,11 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DailyAbsencesPage } from "./pages/DailyAbsencesPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { EmployeeDetailPage } from "./pages/EmployeeDetailPage";
+import { EmployeeContractsPage } from "./pages/EmployeeContractsPage";
 import { EmployeeBioTimeFormPage } from "./pages/EmployeeBioTimeFormPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ManualAbsenceDeclarationPage } from "./pages/ManualAbsenceDeclarationPage";
 import { LeaveDeclarationPage } from "./pages/LeaveDeclarationPage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { OrgChartPage } from "./pages/OrgChartPage";
@@ -24,6 +26,13 @@ import { NotFoundPage, UsersAdminPage } from "./pages/SimplePages";
 import { SyncAdminPage } from "./pages/SyncAdminPage";
 import { SapDirectoryPage } from "./pages/SapDirectoryPage";
 import { ValidationPage } from "./pages/ValidationPage";
+import { JobDescriptionsLibraryPage } from "./pages/JobDescriptionsLibraryPage";
+import { JobDescriptionBuilderPage } from "./pages/JobDescriptionBuilderPage";
+import { JobDescriptionWorkflowPage } from "./pages/JobDescriptionWorkflowPage";
+import { JobDescriptionDocumentPage } from "./pages/JobDescriptionDocumentPage";
+import { JobDescriptionWizardPage } from "./pages/JobDescriptionWizardPage";
+import { JobDescriptionImportPage } from "./pages/JobDescriptionImportPage";
+import { JobDescriptionDocumentsPage } from "./pages/JobDescriptionDocumentsPage";
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -48,7 +57,9 @@ export function App() {
         <Route path="/realtime" element={<AttendancePunchesPage />} />
         <Route path="/absences" element={<DailyAbsencesPage />} />
         <Route path="/presumed-absences" element={<PresumedAbsencesPage />} />
+        <Route path="/manual-absences" element={<ManualAbsenceDeclarationPage />} />
         <Route path="/employees" element={<EmployeesPage />} />
+        <Route path="/employee-contracts" element={<EmployeeContractsPage />} />
         <Route path="/employees/resigned" element={<ResignedEmployeesPage />} />
         <Route path="/employees/new" element={<EmployeeBioTimeFormPage />} />
         <Route path="/employees/:id/edit" element={<EmployeeBioTimeFormPage />} />
@@ -67,6 +78,14 @@ export function App() {
         <Route path="/admin/sync" element={<SyncAdminPage />} />
         <Route path="/admin/sap-directory" element={<SapDirectoryPage />} />
         <Route path="/admin/users" element={<UsersAdminPage />} />
+        <Route path="/job-descriptions" element={<JobDescriptionsLibraryPage />} />
+        <Route path="/job-descriptions/templates/:id/builder" element={<JobDescriptionBuilderPage />} />
+        <Route path="/job-descriptions/validation" element={<JobDescriptionWorkflowPage />} />
+        <Route path="/job-descriptions/documents/:id" element={<JobDescriptionDocumentPage />} />
+        <Route path="/job-descriptions/documents" element={<JobDescriptionDocumentsPage />} />
+        <Route path="/job-descriptions/documents/:id/builder" element={<JobDescriptionBuilderPage />} />
+        <Route path="/job-descriptions/new" element={<JobDescriptionWizardPage />} />
+        <Route path="/job-descriptions/import" element={<JobDescriptionImportPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -30,6 +30,9 @@ export function SummaryReportPage() {
   const selectedSubUnit = selectedUnit?.subUnits.find(subUnit => subUnit.id === filters.subUnitId) || null;
   const params = useMemo(() => buildParams(filters), [filters]);
   const summary = useApi<SummaryReportRow[]>(`/api/reports/summary?${params.toString()}`, []);
+  const [displayMode, setDisplayMode] = useState<"summary" | "detailed">("summary");
+  const detailedRows = useApi<SummaryDailyRecordRow[]>(displayMode === "detailed" ? `/api/reports/summary/daily?${params.toString()}` : null, []);
+  const exportParams = useMemo(() => { const value = new URLSearchParams(params); if (displayMode === "detailed") value.set("mode", "detailed"); return value; }, [params, displayMode]);
   const [message, setMessage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [generatedRows, setGeneratedRows] = useState<number | null>(null);
@@ -86,15 +89,17 @@ export function SummaryReportPage() {
       absenceReversedDays: acc.absenceReversedDays + row.absenceReversedDays,
       restDays: acc.restDays + row.restDays,
       incompleteDays: acc.incompleteDays + row.incompleteDays,
+      contractNotStartedDays: acc.contractNotStartedDays + row.contractNotStartedDays,
+      contractEndedDays: acc.contractEndedDays + row.contractEndedDays,
       workedHours: acc.workedHours + row.totalWorkedHours,
       overtime50: acc.overtime50 + row.overtimeHoursRate50,
       overtime75: acc.overtime75 + row.overtimeHoursRate75,
       overtime100: acc.overtime100 + row.overtimeHoursRate100,
       overtime: acc.overtime + row.totalOvertimeHours
     }),
-    { presentDays: 0, absentDays: 0, sickDays: 0, leaveDays: 0, compensatedDays: 0, absenceReversedDays: 0, restDays: 0, incompleteDays: 0, workedHours: 0, overtime50: 0, overtime75: 0, overtime100: 0, overtime: 0 }
+    { presentDays: 0, absentDays: 0, sickDays: 0, leaveDays: 0, compensatedDays: 0, absenceReversedDays: 0, restDays: 0, incompleteDays: 0, contractNotStartedDays: 0, contractEndedDays: 0, workedHours: 0, overtime50: 0, overtime75: 0, overtime100: 0, overtime: 0 }
   );
-  const totalDailyRows = totals.presentDays + totals.absentDays + totals.sickDays + totals.leaveDays + totals.compensatedDays + totals.absenceReversedDays + totals.restDays + totals.incompleteDays;
+  const totalDailyRows = totals.presentDays + totals.absentDays + totals.sickDays + totals.leaveDays + totals.compensatedDays + totals.absenceReversedDays + totals.restDays + totals.incompleteDays + totals.contractNotStartedDays + totals.contractEndedDays;
   const lastGeneratedAt = summary.data.reduce<string | null>((latest, row) => {
     if (!latest || row.lastGeneratedAt > latest) return row.lastGeneratedAt;
     return latest;
@@ -148,6 +153,12 @@ export function SummaryReportPage() {
           </FilterField>
         </FiltersBar>
 
+        <div className="summary-view-switch no-print" aria-label="Mode d'affichage">
+          <span>Mode d'affichage</span>
+          <button className={displayMode === "summary" ? "active" : ""} onClick={() => setDisplayMode("summary")}>Synthèse</button>
+          <button className={displayMode === "detailed" ? "active" : ""} onClick={() => setDisplayMode("detailed")}>Détaillé</button>
+        </div>
+
         <div className="attendance-summary-strip">
           <div><span>Employés affichés</span><strong>{summary.data.length}</strong></div>
           <div><span>Jours synthèse</span><strong>{generatedRows ?? totalDailyRows}</strong></div>
@@ -171,12 +182,12 @@ export function SummaryReportPage() {
           <Button variant="primary" onClick={regenerateSummary} disabled={generating}>
             <RefreshCw size={16} /> {generating ? "Génération..." : "Régénérer la période"}
           </Button>
-          <ExportButtons excelUrl={fileUrl("/api/reports/summary/export/excel", params)} pdfUrl={fileUrl("/api/reports/summary/export/pdf", params)} />
+          <ExportButtons excelUrl={fileUrl("/api/reports/summary/export/excel", exportParams)} pdfUrl={fileUrl("/api/reports/summary/export/pdf", exportParams)} />
           {lastGeneratedAt && <span className="muted">Dernière génération: {new Date(lastGeneratedAt).toLocaleString("fr-FR")}</span>}
         </div>
         <AttendanceStatusLegend />
 
-        <DataTable
+        {displayMode === "summary" ? <DataTable
           rows={summary.data}
           loading={summary.loading || orgTree.loading}
           loadingLabel="Chargement de la synthèse persistée..."
@@ -185,19 +196,19 @@ export function SummaryReportPage() {
           columns={[
             { key: "employee", header: "Employé", render: row => <div className="table-main-cell"><strong>{row.employee.fullName}</strong><span>{row.employee.code}</span></div>, sortValue: row => row.employee.fullName },
             { key: "org", header: "Organigramme", render: row => [row.employee.unitName, row.employee.subUnitName, row.employee.groupName].filter(Boolean).join(" > ") || "-", sortValue: row => `${row.employee.unitName || ""}${row.employee.subUnitName || ""}${row.employee.groupName || ""}` },
-            { key: "present", header: "Présents", render: row => row.presentDays, sortValue: row => row.presentDays },
-            { key: "absent", header: "Absents", render: row => row.absentDays, sortValue: row => row.absentDays },
-            { key: "sick", header: "Maladie", render: row => row.sickDays, sortValue: row => row.sickDays },
-            { key: "leave", header: "Congé", render: row => row.leaveDays, sortValue: row => row.leaveDays },
-            { key: "comp", header: "Compensés", render: row => row.compensatedDays, sortValue: row => row.compensatedDays },
-            { key: "reversed", header: "Sans preuve", render: row => row.absenceReversedDays, sortValue: row => row.absenceReversedDays },
-            { key: "rest", header: "Repos", render: row => row.restDays, sortValue: row => row.restDays },
-            { key: "inc", header: "Incomplets", render: row => row.incompleteDays, sortValue: row => row.incompleteDays },
+            { key: "present", header: "Présents", render: row => summaryValue(row.presentDays, "green"), sortValue: row => row.presentDays },
+            { key: "absent", header: "Absents", render: row => summaryValue(row.absentDays, "orange"), sortValue: row => row.absentDays },
+            { key: "sick", header: "Maladie", render: row => summaryValue(row.sickDays, "orange"), sortValue: row => row.sickDays },
+            { key: "leave", header: "Congé", render: row => summaryValue(row.leaveDays, "orange"), sortValue: row => row.leaveDays },
+            { key: "comp", header: "Compensés", render: row => summaryValue(row.compensatedDays, "green"), sortValue: row => row.compensatedDays },
+            { key: "reversed", header: "Sans preuve", render: row => summaryValue(row.absenceReversedDays, "orange"), sortValue: row => row.absenceReversedDays },
+            { key: "rest", header: "Repos", render: row => summaryValue(row.restDays, "blue"), sortValue: row => row.restDays },
+            { key: "inc", header: "Incomplets", render: row => summaryValue(row.incompleteDays, "orange"), sortValue: row => row.incompleteDays },
             { key: "hours", header: "Heures", render: row => `${row.totalWorkedHours} h`, sortValue: row => row.totalWorkedHours },
-            { key: "ot50", header: "Sup. 50%", render: row => `${row.overtimeHoursRate50} h`, sortValue: row => row.overtimeHoursRate50 },
-            { key: "ot75", header: "Sup. 75%", render: row => `${row.overtimeHoursRate75} h`, sortValue: row => row.overtimeHoursRate75 },
-            { key: "ot100", header: "Sup. 100%", render: row => `${row.overtimeHoursRate100} h`, sortValue: row => row.overtimeHoursRate100 },
-            { key: "ot", header: "Total sup.", render: row => `${row.totalOvertimeHours} h`, sortValue: row => row.totalOvertimeHours },
+            { key: "ot50", header: "Sup. 50%", render: row => summaryValue(row.overtimeHoursRate50, "orange", " h"), sortValue: row => row.overtimeHoursRate50 },
+            { key: "ot75", header: "Sup. 75%", render: row => summaryValue(row.overtimeHoursRate75, "orange", " h"), sortValue: row => row.overtimeHoursRate75 },
+            { key: "ot100", header: "Sup. 100%", render: row => summaryValue(row.overtimeHoursRate100, "orange", " h"), sortValue: row => row.overtimeHoursRate100 },
+            { key: "ot", header: "Total sup.", render: row => summaryValue(row.totalOvertimeHours, "orange", " h"), sortValue: row => row.totalOvertimeHours },
             { key: "calendar", header: "Calendrier", render: row => (
               <Button variant="ghost" onClick={() => setCalendarEmployee(row.employee)}>
                 <CalendarDays size={16} /> Voir
@@ -205,7 +216,7 @@ export function SummaryReportPage() {
             ) },
             { key: "period", header: "Période analysée", render: () => `${formatDate(filters.startDate)} - ${formatDate(filters.endDate)}`, sortValue: () => `${filters.startDate}${filters.endDate}` },
           ]}
-        />
+        /> : <DetailedSummaryTable rows={summary.data} dailyRows={detailedRows.data} startDate={filters.startDate} endDate={filters.endDate} loading={summary.loading || detailedRows.loading} />}
       </section>
       {calendarEmployee && (
         <div className="modal-backdrop">
@@ -226,6 +237,24 @@ export function SummaryReportPage() {
     </>
   );
 }
+
+function summaryValue(value: number, tone: "green" | "orange" | "blue", suffix = "") {
+  return <span className={`summary-value-pill ${value ? `summary-value-${tone}` : "summary-value-zero"}`}>{value}{suffix}</span>;
+}
+
+function DetailedSummaryTable({ rows, dailyRows, startDate, endDate, loading }: { rows: SummaryReportRow[]; dailyRows: SummaryDailyRecordRow[]; startDate: string; endDate: string; loading: boolean }) {
+  if (loading) return <LoadingState label="Chargement de la synthèse détaillée..." />;
+  const dates = dateRange(startDate, endDate), byDay = new Map(dailyRows.map(row => [`${row.employeeId}:${row.workDate}`, row.status]));
+  const totals = [
+    ["P", (row: SummaryReportRow) => row.presentDays], ["A", (row: SummaryReportRow) => row.absentDays], ["M", (row: SummaryReportRow) => row.sickDays], ["C", (row: SummaryReportRow) => row.leaveDays],
+    ["CP", (row: SummaryReportRow) => row.compensatedDays], ["R", (row: SummaryReportRow) => row.restDays], ["I", (row: SummaryReportRow) => row.incompleteDays], ["SP", (row: SummaryReportRow) => row.absenceReversedDays],
+    ["DC", (row: SummaryReportRow) => row.contractNotStartedDays], ["EC", (row: SummaryReportRow) => row.contractEndedDays]
+  ] as const;
+  return <div className="detailed-summary-wrap"><table className="detailed-summary-table"><thead><tr><th className="fixed-code">Matricule</th><th className="fixed-name">Nom Prénom</th><th className="fixed-structure">Structure / Département</th>{dates.map(date => <th key={date} className="day-column" title={formatDate(date)}>{date.slice(8, 10)}</th>)}{totals.map(([code]) => <th key={code} className="total-column">T.{code}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={row.employee.id}><td className="fixed-code">{row.employee.code}</td><td className="fixed-name"><strong>{row.employee.fullName}</strong></td><td className="fixed-structure">{[row.employee.unitName, row.employee.subUnitName, row.employee.groupName].filter(Boolean).join(" > ") || row.employee.department || "-"}</td>{dates.map(date => { const code = shortStatus(byDay.get(`${row.employee.id}:${date}`)); return <td key={date} className="day-column">{code && <span className={`daily-code daily-code-${code.toLowerCase()}`}>{code}</span>}</td>; })}{totals.map(([code, value]) => <td key={code} className="total-column">{summaryValue(value(row), code === "P" || code === "CP" ? "green" : code === "R" ? "blue" : "orange")}</td>)}</tr>)}</tbody></table>{!rows.length && <div className="empty-state">Aucune synthèse générée pour cette période.</div>}</div>;
+}
+
+function dateRange(startDate: string, endDate: string) { const dates: string[] = [], cursor = new Date(`${startDate}T00:00:00Z`), end = new Date(`${endDate}T00:00:00Z`); while (cursor <= end) { dates.push(cursor.toISOString().slice(0, 10)); cursor.setUTCDate(cursor.getUTCDate() + 1); } return dates; }
+function shortStatus(status?: SummaryDailyRecordRow["status"]) { return status === "PRESENT" ? "P" : status === "ABSENT" ? "A" : status === "SICK" || status === "ACCIDENT" ? "M" : status === "LEAVE" ? "C" : status === "COMPENSATED" ? "CP" : status === "REST" ? "R" : status === "INCOMPLETE" ? "I" : status === "ABSENCE_REVERSED" ? "SP" : status === "CONTRACT_NOT_STARTED" ? "DC" : status === "CONTRACT_ENDED" ? "EC" : ""; }
 
 function SummaryPunchCalendar({ rows, startDate, endDate }: { rows: SummaryDailyRecordRow[]; startDate: string; endDate: string }) {
   const byDate = new Map(rows.map(row => [row.workDate, row]));

@@ -86,6 +86,8 @@ export class PresumedAbsenceService {
     const employees = await this.prisma.employee.findMany({
       where: {
         status: "ACTIVE",
+        attendanceTrackingExempt: false,
+        OR: [{ contracts: { none: {} } }, { contracts: { some: { startDate: { lte: targetDay }, OR: [{ endDate: null }, { endDate: { gte: targetDay } }] } } }],
         plannedShiftAssignments: {
           none: {
             date: targetDay
@@ -175,7 +177,7 @@ export class PresumedAbsenceService {
         date: targetDay,
         status: "APPROVED",
         shiftDefinition: { shiftType: "REPOS" },
-        employee: { status: "ACTIVE" }
+        employee: { status: "ACTIVE", attendanceTrackingExempt: false }
       },
       select: {
         employee: { select: { id: true, employeeCode: true, biotimeCode: true, localMatricule: true } }
@@ -234,6 +236,7 @@ export class PresumedAbsenceService {
       date: dateRange,
       employee: {
         ...employeeScope,
+        attendanceTrackingExempt: false,
         ...(search ? {
           OR: [
             { fullName: { contains: search, mode: "insensitive" } },

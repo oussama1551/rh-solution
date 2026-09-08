@@ -5,15 +5,17 @@ import { employeeScopeWhere } from "../common/employee-scope";
 import { RequestUser } from "../common/request-user.type";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { ReportsService } from "../reports/reports.service";
 import { RoleCode } from "../roles/role-codes";
-import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, UpdateLeaveDeclarationDto, UpdateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
+import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateManualAbsenceDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, UpdateLeaveDeclarationDto, UpdateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
 
 @Injectable()
 export class ManualDeclarationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly reports: ReportsService
   ) {}
 
   async createOvertime(dto: CreateOvertimeDeclarationDto, actor: RequestUser) {
@@ -115,6 +117,53 @@ export class ManualDeclarationsService {
     return row;
   }
 
+  async createManualAbsence(dto: CreateManualAbsenceDeclarationDto, actor: RequestUser) {
+    this.ensureAbsenceReversalDeclarer(actor);
+    const reason = dto.reason?.trim();
+    if (!reason) throw new BadRequestException("Le motif de l'absence est obligatoire.");
+    await this.ensureEmployeeVisible(dto.employeeId, actor);
+    const date = parseDate(dto.absenceDate), next = parseDate(addDays(dto.absenceDate, 1));
+    const [mainAbsences, punchCount, sickCount, leaveCount, existing] = await Promise.all([
+      this.reports.dailyAbsences({ date: dto.absenceDate }, actor),
+      this.prisma.attendancePunch.count({ where: { employeeId: dto.employeeId, countsAsPresence: true, punchTime: { gte: date, lt: next } } }),
+      this.prisma.sickLeaveDeclaration.count({ where: { employeeId: dto.employeeId, status: ApprovalStatus.APPROVED, dateStart: { lte: date }, dateEnd: { gte: date } } }),
+      this.prisma.leaveDeclaration.count({ where: { employeeId: dto.employeeId, status: ApprovalStatus.APPROVED, dateStart: { lte: date }, dateEnd: { gte: date } } }),
+      this.prisma.manualAbsenceDeclaration.findUnique({ where: { employeeId_absenceDate: { employeeId: dto.employeeId, absenceDate: date } } })
+    ]);
+    if (mainAbsences.rows.some(row => row.employee.id === dto.employeeId && row.status === "ABSENT")) throw new BadRequestException("Cette absence existe déjà dans le module Absences principal.");
+    if (punchCount) throw new BadRequestException("Déclaration impossible : un pointage réel existe pour cet employé ce jour-là.");
+    if (sickCount || leaveCount) throw new BadRequestException("Déclaration impossible : ce jour est déjà couvert par une maladie ou un congé approuvé.");
+    if (existing && existing.status !== ApprovalStatus.REJECTED) throw new BadRequestException("Une déclaration d'absence existe déjà pour cet employé et ce jour.");
+    const approval = this.approvalFor(actor);
+    const decision = { reason, declaredById: actor.id, status: approval.status, approvedById: approval.status === ApprovalStatus.APPROVED ? actor.id : null, approvedAt: approval.status === ApprovalStatus.APPROVED ? new Date() : null };
+    const row = existing
+      ? await this.prisma.manualAbsenceDeclaration.update({ where: { id: existing.id }, data: decision, include: this.manualAbsenceInclude() })
+      : await this.prisma.manualAbsenceDeclaration.create({ data: { employeeId: dto.employeeId, absenceDate: date, ...decision }, include: this.manualAbsenceInclude() });
+    await this.audit.record({ userId: actor.id, action: "manual_absence.create", entityType: "manual_absence_declaration", entityId: row.id, after: row as Prisma.InputJsonValue });
+    if (row.status === ApprovalStatus.PENDING_APPROVAL) await this.notifyPending(row, "Absence manuelle à valider", "manual_absence_declaration");
+    return row;
+  }
+
+  async listManualAbsences(actor: RequestUser) {
+    return this.prisma.manualAbsenceDeclaration.findMany({ where: { employee: employeeScopeWhere(actor) }, orderBy: [{ absenceDate: "desc" }, { createdAt: "desc" }], take: 1000, include: this.manualAbsenceInclude() });
+  }
+
+  async approveManualAbsence(id: string, actor: RequestUser) {
+    this.ensureApprover(actor);
+    const row = await this.prisma.manualAbsenceDeclaration.update({ where: { id }, data: { status: ApprovalStatus.APPROVED, approvedById: actor.id, approvedAt: new Date() }, include: this.manualAbsenceInclude() }).catch(() => null);
+    if (!row) throw new NotFoundException("Déclaration d'absence introuvable.");
+    await this.audit.record({ userId: actor.id, action: "manual_absence.approve", entityType: "manual_absence_declaration", entityId: id });
+    return row;
+  }
+
+  async rejectManualAbsence(id: string, reason: string | undefined, actor: RequestUser) {
+    this.ensureApprover(actor);
+    const row = await this.prisma.manualAbsenceDeclaration.update({ where: { id }, data: { status: ApprovalStatus.REJECTED, approvedById: actor.id, approvedAt: new Date(), ...(reason?.trim() ? { reason: reason.trim() } : {}) }, include: this.manualAbsenceInclude() }).catch(() => null);
+    if (!row) throw new NotFoundException("Déclaration d'absence introuvable.");
+    await this.audit.record({ userId: actor.id, action: "manual_absence.reject", entityType: "manual_absence_declaration", entityId: id, metadata: { reason: reason || null } });
+    return row;
+  }
+
   async createSickLeave(dto: CreateSickLeaveDeclarationDto, actor: RequestUser) {
     this.ensureSickLeaveDeclarer(actor);
     if (dto.dateEnd < dto.dateStart) throw new BadRequestException("La date de fin doit être après la date de début.");
@@ -194,14 +243,15 @@ export class ManualDeclarationsService {
   }
 
   async pendingApprovals() {
-    const [overtime, compensations, sickLeaves, leaves, absenceReversals] = await Promise.all([
+    const [overtime, compensations, sickLeaves, leaves, absenceReversals, manualAbsences] = await Promise.all([
       this.prisma.overtimeDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.declarationInclude() }),
       this.prisma.absenceCompensation.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.declarationInclude() }),
       this.prisma.sickLeaveDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.sickLeaveDeclarationInclude() }),
       this.prisma.leaveDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.leaveDeclarationInclude() }),
-      this.prisma.absenceReversalRequest.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.absenceReversalInclude() })
+      this.prisma.absenceReversalRequest.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.absenceReversalInclude() }),
+      this.prisma.manualAbsenceDeclaration.findMany({ where: { status: ApprovalStatus.PENDING_APPROVAL }, orderBy: { createdAt: "asc" }, include: this.manualAbsenceInclude() })
     ]);
-    return { overtime, compensations, sickLeaves, leaves, absenceReversals };
+    return { overtime, compensations, sickLeaves, leaves, absenceReversals, manualAbsences };
   }
 
   async listOvertime(actor: RequestUser, employeeId?: string) {
@@ -242,6 +292,33 @@ export class ManualDeclarationsService {
       orderBy: [{ dateStart: "desc" }, { createdAt: "desc" }],
       take: 300,
       include: this.sickLeaveDeclarationInclude()
+    });
+  }
+
+  async overtimeByEmployee(actor: RequestUser) {
+    const employees = await this.prisma.employee.findMany({
+      where: employeeScopeWhere(actor),
+      orderBy: { fullName: "asc" },
+      select: {
+        id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true, department: true,
+        overtimeDeclarations: { select: { hours: true, rateType: true, status: true } }
+      }
+    });
+    return employees.map(employee => {
+      const totals = { rate50: 0, rate75: 0, rate100: 0, total: 0 };
+      for (const declaration of employee.overtimeDeclarations) {
+        const hours = Number(declaration.hours);
+        totals.total += hours;
+        if (declaration.rateType === "RATE_75") totals.rate75 += hours;
+        else if (declaration.rateType === "RATE_100") totals.rate100 += hours;
+        else totals.rate50 += hours;
+      }
+      return {
+        employee: { id: employee.id, fullName: employee.fullName, localMatricule: employee.localMatricule, biotimeCode: employee.biotimeCode, employeeCode: employee.employeeCode, department: employee.department },
+        declarationCount: employee.overtimeDeclarations.length,
+        pendingCount: employee.overtimeDeclarations.filter(row => row.status === ApprovalStatus.PENDING_APPROVAL).length,
+        ...totals
+      };
     });
   }
 
@@ -530,7 +607,7 @@ export class ManualDeclarationsService {
   }
 
   private async ensureEmployeeVisible(employeeId: string, actor: RequestUser) {
-    const employee = await this.prisma.employee.findFirst({ where: { id: employeeId, ...employeeScopeWhere(actor) }, select: { id: true } });
+    const employee = await this.prisma.employee.findFirst({ where: { id: employeeId, attendanceTrackingExempt: false, ...employeeScopeWhere(actor) }, select: { id: true } });
     if (!employee) throw new NotFoundException("Employé introuvable ou non autorisé.");
   }
 
@@ -569,6 +646,19 @@ export class ManualDeclarationsService {
   }
 
   private async validateLeaveRules(employeeId: string, dateStart: Date, dateEnd: Date, leaveType: LeaveType, exceptionalReason: ExceptionalLeaveReason | null, note: string | undefined, actor: RequestUser, excludeId?: string) {
+    const exactDuplicate = await this.prisma.leaveDeclaration.findFirst({
+      where: {
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        employeeId,
+        dateStart,
+        dateEnd,
+        status: { not: ApprovalStatus.REJECTED }
+      },
+      select: { id: true, status: true }
+    });
+    if (exactDuplicate) {
+      throw new BadRequestException("Un congé existe déjà pour cet employé avec exactement les mêmes dates. Création en double interdite.");
+    }
     const duration = daysInclusive(dateStart, dateEnd);
     const canOverride = this.canOverrideSensitiveLeaveRule(actor) && Boolean(note?.trim());
     if (leaveType === LeaveType.EXCEPTIONNEL && !exceptionalReason) {
@@ -674,6 +764,14 @@ export class ManualDeclarationsService {
   }
 
   private absenceReversalInclude() {
+    return {
+      employee: { select: { id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true, department: true } },
+      declaredBy: { select: { id: true, username: true, fullName: true } },
+      approvedBy: { select: { id: true, username: true, fullName: true } }
+    } as const;
+  }
+
+  private manualAbsenceInclude() {
     return {
       employee: { select: { id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true, department: true } },
       declaredBy: { select: { id: true, username: true, fullName: true } },

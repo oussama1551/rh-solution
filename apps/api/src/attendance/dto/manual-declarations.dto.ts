@@ -110,3 +110,15 @@ export class CreateAbsenceReversalRequestDto {
   @IsNotEmpty()
   reason!: string;
 }
+
+export class CreateManualAbsenceDeclarationDto {
+  @IsUUID()
+  employeeId!: string;
+
+  @IsDateString()
+  absenceDate!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+}

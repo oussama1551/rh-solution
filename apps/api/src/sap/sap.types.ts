@@ -35,3 +35,6 @@ export type SapPayrollLine = {
   base: number | string | null;
   amount: number | string | null;
 };
+
+export type SapOperationalAbsence = { company: string; sapMatricule: string; lastName: string | null; firstName: string | null; period: string; absenceType: string | null; hours: number | string | null; days: number | string | null };
+export type SapOperationalOvertime = { company: string; sapMatricule: string; lastName: string | null; firstName: string | null; period: string; workDate: Date | string; hours50: number | string | null; hours75: number | string | null; hours100: number | string | null };

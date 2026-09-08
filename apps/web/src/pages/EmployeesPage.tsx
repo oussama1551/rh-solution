@@ -1,4 +1,4 @@
-import { Clock3, Edit, Eye, Plus, Search, UserX } from "lucide-react";
+import { ClipboardCheck, Clock3, Edit, Eye, Plus, Search, UserX } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { BiometricBadges } from "../components/BiometricBadges";
@@ -44,7 +44,7 @@ export function EmployeesPage() {
 
   return (
     <>
-      <PageHeader title="Employés" actions={<PermissionGate permission="employees.manage"><Link className="btn btn-primary" to="/employees/new"><Plus size={15} /> Nouvel employé</Link></PermissionGate>} />
+      <PageHeader title="Employés" actions={<PermissionGate permission="employees.manage"><div className="row-actions"><Link className="btn btn-secondary" to="/employee-contracts"><ClipboardCheck size={15} /> Contrats</Link><Link className="btn btn-primary" to="/employees/new"><Plus size={15} /> Nouvel employé + contrat</Link></div></PermissionGate>} />
       <section className="panel">
         <FiltersBar onReset={reset}>
           <FilterField label="Recherche">

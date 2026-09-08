@@ -5,6 +5,10 @@ import { RoleCode } from "../src/roles/role-codes";
 
 const admin = { id: "admin-id", username: "admin", roles: [RoleCode.Admin], permissions: [] };
 const managerA = { id: "manager-a", username: "resp-a", roles: [RoleCode.ResponsableDepartement], permissions: [] };
+const planningManagerA = {
+  ...managerA,
+  roles: [RoleCode.ResponsableDepartement, RoleCode.ResponsablePlanningGroupes]
+};
 
 function createService() {
   const prisma = {
@@ -135,6 +139,39 @@ describe("OrgService group ownership restrictions", () => {
       })
     }));
     expect((result as any).pendingApproval).toBe(true);
+  });
+
+  it("applies a membership change immediately for the special planning-groups responsable", async () => {
+    const { service, prisma } = createService();
+    prisma.group.findUnique.mockResolvedValueOnce({
+      id: "group-a",
+      name: "Group A",
+      status: ApprovalStatus.APPROVED,
+      createdById: "manager-a",
+      subUnitId: "sub-unit-1"
+    });
+    prisma.employee.findUnique.mockResolvedValue({
+      id: "employee-1",
+      fullName: "Employee One",
+      groupId: "group-a",
+      group: { id: "group-a", name: "Group A" }
+    });
+    prisma.employee.update.mockResolvedValue({
+      id: "employee-1",
+      fullName: "Employee One",
+      groupId: null,
+      group: null
+    });
+
+    const result = await service.moveEmployee("employee-1", { groupId: null }, planningManagerA as any);
+
+    expect(prisma.group.findMany).not.toHaveBeenCalled();
+    expect(prisma.groupMembershipChange.create).not.toHaveBeenCalled();
+    expect(prisma.employee.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "employee-1" },
+      data: { groupId: null }
+    }));
+    expect((result as any).pendingApproval).toBeUndefined();
   });
 
   it("removes an employee immediately for a responsable while the group or planning is not approved yet", async () => {

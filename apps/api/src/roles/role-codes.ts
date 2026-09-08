@@ -4,6 +4,7 @@ export const RoleCode = {
   DRH: "DRH",
   GRH: "GRH",
   ResponsableDepartement: "RESPONSABLE_DEPARTEMENT",
+  ResponsablePlanningGroupes: "RESPONSABLE_PLANNING_GROUPES",
   HR: "HR",
   Supervisor: "SUPERVISOR",
   ReadOnly: "READ_ONLY"

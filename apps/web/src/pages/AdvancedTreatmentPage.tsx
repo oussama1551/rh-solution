@@ -9,11 +9,12 @@ import { api, fileUrl } from "../lib/api";
 import { AdvancedTreatmentCalendar, AdvancedTreatmentResponse, AdvancedTreatmentRiskLevel, AdvancedTreatmentRow, OrgUnit } from "../lib/types";
 import { useApi, useSessionFilters } from "../lib/useApi";
 
-const DEFAULT_START = "2026-07-26";
-const DEFAULT_END = "2026-08-14";
+const DEFAULT_PERIOD = currentEvaluationPeriod();
+const DEFAULT_START = DEFAULT_PERIOD.startDate;
+const DEFAULT_END = DEFAULT_PERIOD.endDate;
 
 export function AdvancedTreatmentPage() {
-  const { filters, update, reset } = useSessionFilters("advanced.treatment.filters", {
+  const { filters, update, reset } = useSessionFilters("advanced.treatment.filters.v2", {
     startDate: DEFAULT_START,
     endDate: DEFAULT_END,
     search: "",
@@ -46,6 +47,8 @@ export function AdvancedTreatmentPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshingSap, setRefreshingSap] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [decisionTab, setDecisionTab] = useState<"pending" | "confirmed" | "rejected">("pending");
+  const visibleRows = useMemo(() => analysis.data.rows.filter(row => decisionTab === "confirmed" ? row.confirmed : decisionTab === "rejected" ? row.frozen : !row.confirmed && !row.frozen), [analysis.data.rows, decisionTab]);
 
   async function confirm(row: AdvancedTreatmentRow) {
     setBusyId(row.employee.id);
@@ -88,7 +91,7 @@ export function AdvancedTreatmentPage() {
     setMessage(null);
     try {
       await api(`/api/advanced-treatment/${row.employee.id}/freeze?${params.toString()}`, { method: "POST", body: JSON.stringify({ reason: "Retiré de la liste de tri" }) });
-      setMessage(`${row.employee.fullName} gelé et déplacé en bas de la liste.`);
+      setMessage(`${row.employee.fullName} classé comme non confirmé.`);
       await analysis.reload();
     } finally {
       setBusyId(null);
@@ -165,7 +168,7 @@ export function AdvancedTreatmentPage() {
         </div>
 
         <div className="row-actions">
-          <Button variant="secondary" onClick={analysis.reload}><RefreshCw size={16} /> Actualiser</Button>
+          <Button variant="secondary" onClick={analysis.reload}><RefreshCw size={16} /> Mettre à jour la liste du personnel</Button>
           <Button variant="secondary" onClick={refreshSapAccounts} disabled={refreshingSap}>
             <RefreshCw size={16} /> {refreshingSap ? "SAP..." : "Actualiser comptes SAP"}
           </Button>
@@ -176,11 +179,17 @@ export function AdvancedTreatmentPage() {
             </a>
           ))}
           <a className="btn btn-secondary" href={fileUrl("/api/advanced-treatment/export/frozen/excel", params)}><Download size={16} /> Excel refusés</a>
-          <span className="muted">Période par défaut fixe, modifiable: {formatDate(filters.startDate)} - {formatDate(filters.endDate)}</span>
+          <span className="muted">Cycle courant modifiable : {formatDate(filters.startDate)} - {formatDate(filters.endDate)}</span>
+        </div>
+
+        <div className="tabs">
+          <button className={decisionTab === "pending" ? "active" : ""} onClick={() => setDecisionTab("pending")}>En attente ({analysis.data.rows.filter(row => !row.confirmed && !row.frozen).length})</button>
+          <button className={decisionTab === "confirmed" ? "active" : ""} onClick={() => setDecisionTab("confirmed")}>Confirmés ({analysis.data.stats.confirmed})</button>
+          <button className={decisionTab === "rejected" ? "active" : ""} onClick={() => setDecisionTab("rejected")}>Non confirmés ({analysis.data.stats.frozen})</button>
         </div>
 
         <DataTable
-          rows={analysis.data.rows}
+          rows={visibleRows}
           loading={analysis.loading || orgTree.loading}
           loadingLabel="Analyse du traitement avance..."
           empty="Aucun employé avec 6 mois ou plus trouvé pour cette période."
@@ -203,6 +212,9 @@ export function AdvancedTreatmentPage() {
                 {row.justifiedDays > 0 && <span className="justified-note">À vérifier avant confirmation</span>}
               </div>
             ), sortValue: row => row.justifiedDays },
+            { key: "sapAbsence", header: "Absence saisie SAP", render: row => row.sapAbsenceTypes.length ? (
+              <div className="table-main-cell advanced-sap-absence-cell"><strong>{row.sapAbsenceTypes.join(" · ")}</strong><span>{formatNumber(row.sapAbsenceDays)} j · {formatNumber(row.sapAbsenceHours)} h</span></div>
+            ) : <span className="muted">Aucune</span>, sortValue: row => row.sapAbsenceDays },
             { key: "risk", header: "Analyse", render: row => <RiskBadge level={row.riskLevel} label={row.riskLabel} />, sortValue: row => riskRank(row.riskLevel) },
             { key: "confirmed", header: "Confirmation", render: row => row.frozen ? (
               <div className="table-main-cell"><span className="badge badge-gray">Gelé</span><span>{row.frozenBy?.fullName || row.frozenBy?.username || "-"} · {row.frozenAt ? displayDateTime(row.frozenAt) : "-"}</span></div>
@@ -221,7 +233,7 @@ export function AdvancedTreatmentPage() {
                     ) : (
                       <Button variant="primary" onClick={() => confirm(row)} disabled={busyId === row.employee.id}><Check size={15} /> Confirmer</Button>
                     )}
-                    <Button variant="secondary" onClick={() => freeze(row)} disabled={busyId === row.employee.id}><X size={15} /> Geler</Button>
+                    <Button variant="secondary" onClick={() => freeze(row)} disabled={busyId === row.employee.id}><X size={15} /> Non confirmer</Button>
                   </>
                 )}
               </div>
@@ -384,6 +396,16 @@ function buildPeriodCells(days: string[]) {
 
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function currentEvaluationPeriod(now = new Date()) {
+  const start = now.getDate() >= 26 ? new Date(now.getFullYear(), now.getMonth(), 26) : new Date(now.getFullYear(), now.getMonth() - 1, 26);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 14);
+  return { startDate: dateKey(start), endDate: dateKey(end) };
+}
+
+function formatNumber(value: number) {
+  return value.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
 }
 
 function formatDate(value: string) {

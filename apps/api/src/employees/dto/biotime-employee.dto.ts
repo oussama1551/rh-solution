@@ -36,6 +36,24 @@ export class BioTimeEmployeeDto {
   hireDate?: string;
 
   @IsOptional()
+  @IsDateString()
+  contractEndDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  contractType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  contractReference?: string;
+
+  @IsOptional()
+  @IsString()
+  contractNote?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(120)
   area?: string;

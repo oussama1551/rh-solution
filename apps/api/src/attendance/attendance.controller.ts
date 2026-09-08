@@ -13,7 +13,7 @@ import { RejectAttendanceFlagDto } from "./dto/reject-attendance-flag.dto";
 import { ShiftPlanningService } from "./shift-planning.service";
 import { ManualDeclarationsService } from "./manual-declarations.service";
 import { PresumedAbsenceService } from "./presumed-absence.service";
-import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, UpdateLeaveDeclarationDto, UpdateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
+import { CreateAbsenceCompensationDto, CreateAbsenceReversalRequestDto, CreateLeaveDeclarationDto, CreateManualAbsenceDeclarationDto, CreateOvertimeDeclarationDto, CreateSickLeaveDeclarationDto, UpdateLeaveDeclarationDto, UpdateSickLeaveDeclarationDto } from "./dto/manual-declarations.dto";
 
 @Controller("attendance")
 export class AttendanceController {
@@ -264,6 +264,36 @@ export class AttendanceController {
   @Permissions(PermissionCode.AttendanceRead)
   deleteSickLeave(@Param("id") id: string, @CurrentUser() user: RequestUser) {
     return this.declarations.deleteSickLeave(id, user);
+  }
+
+  @Post("declarations/manual-absences")
+  @Permissions(PermissionCode.AttendanceRead)
+  createManualAbsence(@Body() dto: CreateManualAbsenceDeclarationDto, @CurrentUser() user: RequestUser) {
+    return this.declarations.createManualAbsence(dto, user);
+  }
+
+  @Get("declarations/manual-absences")
+  @Permissions(PermissionCode.AttendanceRead)
+  listManualAbsences(@CurrentUser() user: RequestUser) {
+    return this.declarations.listManualAbsences(user);
+  }
+
+  @Patch("declarations/manual-absences/:id/approve")
+  @Permissions(PermissionCode.AttendanceManage)
+  approveManualAbsence(@Param("id") id: string, @CurrentUser() user: RequestUser) {
+    return this.declarations.approveManualAbsence(id, user);
+  }
+
+  @Patch("declarations/manual-absences/:id/reject")
+  @Permissions(PermissionCode.AttendanceManage)
+  rejectManualAbsence(@Param("id") id: string, @Body() dto: { reason?: string }, @CurrentUser() user: RequestUser) {
+    return this.declarations.rejectManualAbsence(id, dto.reason, user);
+  }
+
+  @Get("declarations/overtime/by-employee")
+  @Permissions(PermissionCode.AttendanceRead)
+  overtimeByEmployee(@CurrentUser() user: RequestUser) {
+    return this.declarations.overtimeByEmployee(user);
   }
 
   @Patch("declarations/sick-leaves/:id")

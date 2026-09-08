@@ -8,4 +8,5 @@ dist/
 apps/api/prisma/*.xml
 license*.xml
 *.tsbuildinfo
+apps/api/storage/
 .zcode/

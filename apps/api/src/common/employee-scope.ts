@@ -13,9 +13,9 @@ export function employeeScopeWhere(actor?: RequestUser): Prisma.EmployeeWhereInp
 }
 
 export function punchEmployeeScopeWhere(actor?: RequestUser): Prisma.AttendancePunchWhereInput {
-  return isOwnGroupScoped(actor) ? { employee: { group: { createdById: actor?.id } } } : {};
+  return isOwnGroupScoped(actor) ? { employee: { attendanceTrackingExempt: false, group: { createdById: actor?.id } } } : { employee: { attendanceTrackingExempt: false } };
 }
 
 export function shiftAssignmentEmployeeScopeWhere(actor?: RequestUser): Prisma.EmployeeShiftAssignmentWhereInput {
-  return isOwnGroupScoped(actor) ? { employee: { group: { createdById: actor?.id } } } : {};
+  return isOwnGroupScoped(actor) ? { employee: { attendanceTrackingExempt: false, group: { createdById: actor?.id } } } : { employee: { attendanceTrackingExempt: false } };
 }

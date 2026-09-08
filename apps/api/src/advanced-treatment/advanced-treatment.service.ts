@@ -8,6 +8,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { RoleCode } from "../roles/role-codes";
 import { addDays, enumerateDateKeys, parseDateKey, toDateKey } from "../reports/date-utils";
 import { SapDirectoryService } from "../sap/sap-directory.service";
+import { SapHanaClientService } from "../sap/sap-client.service";
 
 export type AdvancedTreatmentQuery = {
   startDate?: string;
@@ -44,6 +45,9 @@ type AdvancedTreatmentRow = {
   justifiedDays: number;
   sickDays: number;
   leaveDays: number;
+  sapAbsenceTypes: string[];
+  sapAbsenceDays: number;
+  sapAbsenceHours: number;
   analyzableDays: number;
   riskLevel: AdvancedTreatmentRiskLevel;
   riskLabel: string;
@@ -73,7 +77,8 @@ export class AdvancedTreatmentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly sapDirectory: SapDirectoryService
+    private readonly sapDirectory: SapDirectoryService,
+    private readonly sap: SapHanaClientService
   ) {}
 
   async list(query: AdvancedTreatmentQuery, actor: RequestUser) {
@@ -187,6 +192,9 @@ export class AdvancedTreatmentService {
       .find(item => item.employee.id === employeeId);
     if (!row) throw new BadRequestException("Employé introuvable ou non éligible pour cette période.");
 
+    await this.prisma.advancedTreatmentConfirmation.deleteMany({
+      where: { employeeId, periodStart: parseDateKey(period.startDate), periodEnd: parseDateKey(period.endDate) }
+    });
     const freeze = await this.prisma.advancedTreatmentFreeze.upsert({
       where: {
         employeeId_periodStart_periodEnd: {
@@ -460,7 +468,8 @@ export class AdvancedTreatmentService {
 
     const from = parseDateKey(period.startDate);
     const toExclusive = parseDateKey(addDays(period.endDate, 1));
-    const [punches, sickLeaves, leaves, confirmations, freezes] = await Promise.all([
+    const sapPeriod = sapPeriodFromDate(period.endDate);
+    const [punches, sickLeaves, leaves, confirmations, freezes, sapAbsences] = await Promise.all([
       this.prisma.attendancePunch.findMany({
         where: {
           employeeId: { in: employeeIds },
@@ -502,7 +511,8 @@ export class AdvancedTreatmentService {
           periodEnd: parseDateKey(period.endDate)
         },
         include: { frozenBy: { select: { id: true, username: true, fullName: true } } }
-      })
+      }),
+      this.sap.listOperationalAbsences(sapPeriod).catch(() => [])
     ]);
 
     const punchDays = new Map<string, Set<string>>();
@@ -511,6 +521,16 @@ export class AdvancedTreatmentService {
     const leaveDays = declarationDaysByEmployee(period, leaves);
     const confirmationByEmployee = new Map(confirmations.map(row => [row.employeeId, row]));
     const freezeByEmployee = new Map(freezes.map(row => [row.employeeId, row]));
+    const sapAbsenceByKey = new Map<string, { types: Set<string>; days: number; hours: number }>();
+    for (const absence of sapAbsences) {
+      const key = `${normalizeCompany(absence.company)}:${extractNumericCode(absence.sapMatricule)}`;
+      const current = sapAbsenceByKey.get(key) || { types: new Set<string>(), days: 0, hours: 0 };
+      const type = String(absence.absenceType || "").trim();
+      if (type) current.types.add(type);
+      current.days += numericValue(absence.days);
+      current.hours += numericValue(absence.hours);
+      sapAbsenceByKey.set(key, current);
+    }
     const workDays = enumerateDateKeys(period.startDate, period.endDate).filter(date => !isFriday(date));
 
     return employees.map(employee => {
@@ -528,6 +548,7 @@ export class AdvancedTreatmentService {
       const frozen = Boolean(freeze);
       const confirmed = Boolean(confirmation) && !frozen;
       const sapRecord = employee.sapDirectoryRecords[0] || null;
+      const sapAbsence = sapRecord ? sapAbsenceByKey.get(`${normalizeCompany(sapRecord.sapCompany)}:${extractNumericCode(sapRecord.sapEmpId)}`) : undefined;
       const bankAccount = sapRecord?.bankAccount || null;
       return {
         employee: {
@@ -552,6 +573,9 @@ export class AdvancedTreatmentService {
         justifiedDays,
         sickDays: sick.size,
         leaveDays: leave.size,
+        sapAbsenceTypes: [...(sapAbsence?.types || [])].sort(),
+        sapAbsenceDays: sapAbsence?.days || 0,
+        sapAbsenceHours: sapAbsence?.hours || 0,
         analyzableDays,
         riskLevel,
         riskLabel: riskLabel(riskLevel),
@@ -572,6 +596,7 @@ export class AdvancedTreatmentService {
     const and: Prisma.EmployeeWhereInput[] = [
       employeeScopeWhere(actor),
       { status: EmployeeStatus.ACTIVE },
+      { attendanceTrackingExempt: false },
       { hireDate: { not: null, lte: threshold } }
     ];
     if (filters.groupId) and.push({ groupId: filters.groupId });
@@ -600,10 +625,33 @@ export class AdvancedTreatmentService {
 }
 
 function normalizePeriod(query: AdvancedTreatmentQuery) {
-  const startDate = validDateKey(query.startDate) ? query.startDate! : "2026-07-26";
-  const endDate = validDateKey(query.endDate) ? query.endDate! : "2026-08-14";
+  const defaults = currentEvaluationPeriod();
+  const startDate = validDateKey(query.startDate) ? query.startDate! : defaults.startDate;
+  const endDate = validDateKey(query.endDate) ? query.endDate! : defaults.endDate;
   if (startDate > endDate) throw new BadRequestException("La date de début doit être avant la date de fin.");
   return { startDate, endDate };
+}
+
+function currentEvaluationPeriod(now = new Date()) {
+  const start = now.getDate() >= 26 ? new Date(now.getFullYear(), now.getMonth(), 26) : new Date(now.getFullYear(), now.getMonth() - 1, 26);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 14);
+  return { startDate: localDateKey(start), endDate: localDateKey(end) };
+}
+
+function sapPeriodFromDate(dateKey: string) {
+  const date = parseDateKey(dateKey);
+  return `${date.getUTCMonth() + 1}/${date.getUTCFullYear()}`;
+}
+
+function extractNumericCode(value?: string | null) {
+  const text = String(value || "").trim();
+  const match = text.match(/(\d+)$/);
+  return match?.[1] || text;
+}
+
+function numericValue(value: number | string | null | undefined) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function validDateKey(value?: string) {

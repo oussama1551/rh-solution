@@ -97,6 +97,7 @@ export class ReportsService {
         fullName: true,
         department: true,
         status: true,
+        contracts: { select: { startDate: true, endDate: true }, orderBy: { startDate: "asc" } },
         group: {
           select: {
             name: true,
@@ -174,6 +175,7 @@ export class ReportsService {
     const rows: PointagePlanningReportRow[] = [];
     for (const employee of employees) {
       for (const workDate of enumerateDateKeys(filters.startDate, filters.endDate)) {
+        if (employee.contracts.length && !employee.contracts.some(contract => toDateKey(contract.startDate) <= workDate && (!contract.endDate || toDateKey(contract.endDate) >= workDate))) continue;
         const key = `${employee.id}:${workDate}`;
         const assignment = assignmentByEmployeeDate.get(key);
         const result = resultByEmployeeDate.get(key);
@@ -204,7 +206,8 @@ export class ReportsService {
 
     const employees = await this.prisma.employee.findMany({
       where: {
-        ...this.employeeWhere({ startDate: date, endDate: date, status: EmployeeStatus.ACTIVE, unitId: filters.unitId, subUnitId: filters.subUnitId, groupId: filters.groupId, search: filters.search }, actor)
+        ...this.employeeWhere({ startDate: date, endDate: date, status: EmployeeStatus.ACTIVE, unitId: filters.unitId, subUnitId: filters.subUnitId, groupId: filters.groupId, search: filters.search }, actor),
+        OR: [{ contracts: { none: {} } }, { contracts: { some: { startDate: { lte: dateStart }, OR: [{ endDate: null }, { endDate: { gte: dateStart } }] } } }]
       },
       orderBy: [{ group: { subUnit: { unit: { name: "asc" } } } }, { group: { subUnit: { name: "asc" } } }, { group: { name: "asc" } }, { fullName: "asc" }],
       select: {
@@ -522,6 +525,7 @@ export class ReportsService {
   private employeeWhere(filters: ReportFilters, actor?: RequestUser): Prisma.EmployeeWhereInput {
     const and: Prisma.EmployeeWhereInput[] = [];
     and.push(employeeScopeWhere(actor));
+    and.push({ attendanceTrackingExempt: false });
     if (filters.employeeId) and.push({ id: filters.employeeId });
     if (filters.groupId) and.push({ groupId: filters.groupId });
     else if (filters.subUnitId) and.push({ group: { subUnitId: filters.subUnitId } });

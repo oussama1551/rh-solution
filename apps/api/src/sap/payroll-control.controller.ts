@@ -4,7 +4,7 @@ import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Permissions } from "../auth/decorators/permissions.decorator";
 import { RequestUser } from "../common/request-user.type";
 import { PermissionCode } from "../permissions/permission-codes";
-import { PayrollControlQueryDto, UpdatePayrollRubricMappingDto } from "./dto/payroll-control.dto";
+import { PayrollControlConfirmationDto, PayrollControlQueryDto, PayrollOperationalQueryDto, PayrollOperationalReviewDto, UpdatePayrollRubricMappingDto } from "./dto/payroll-control.dto";
 import { PayrollControlService } from "./payroll-control.service";
 
 @Controller("payroll-control")
@@ -18,8 +18,8 @@ export class PayrollControlController {
   }
 
   @Get("rubrics")
-  rubrics() {
-    return this.service.rubrics();
+  rubrics(@Query("period") period?: string) {
+    return this.service.rubrics(period);
   }
 
   @Patch("rubrics/:code")
@@ -27,16 +27,41 @@ export class PayrollControlController {
     return this.service.updateRubric(code, dto.mapsTo, user);
   }
 
-  @Get("compare")
-  compare(@Query() query: PayrollControlQueryDto) {
-    return this.service.compare(query);
+  @Get("rows")
+  rows(@Query() query: PayrollControlQueryDto) {
+    return this.service.rows(query);
   }
 
-  @Get("export.csv")
-  async exportCsv(@Query() query: PayrollControlQueryDto, @Res() response: Response) {
-    const csv = await this.service.csv(query);
-    response.setHeader("Content-Type", "text/csv; charset=utf-8");
-    response.setHeader("Content-Disposition", `attachment; filename="controle-paie-${query.period}.csv"`);
-    response.end(`\uFEFF${csv}`);
+  @Get("export")
+  async exportRows(@Query() query: PayrollControlQueryDto, @Res() response: Response) {
+    const buffer = await this.service.exportRows(query);
+    response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    response.setHeader("Content-Disposition", `attachment; filename="controle-paie-bulletin-${query.period.replace(/[^0-9-]+/g, "-")}.xlsx"`);
+    response.send(buffer);
+  }
+
+  @Get("periods")
+  periods() {
+    return this.service.periods();
+  }
+
+  @Post("confirm")
+  confirm(@Body() dto: PayrollControlConfirmationDto, @CurrentUser() user: RequestUser) {
+    return this.service.confirm(dto, user);
+  }
+
+  @Post("restore")
+  restore(@Body() dto: PayrollControlConfirmationDto, @CurrentUser() user: RequestUser) {
+    return this.service.restore(dto, user);
+  }
+
+  @Get("operational")
+  operational(@Query() query: PayrollOperationalQueryDto, @CurrentUser() user: RequestUser) {
+    return this.service.operationalRows(query, user);
+  }
+
+  @Post("operational/review")
+  reviewOperational(@Body() dto: PayrollOperationalReviewDto, @CurrentUser() user: RequestUser) {
+    return this.service.reviewOperational(dto, user);
   }
 }

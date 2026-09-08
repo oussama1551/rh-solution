@@ -20,10 +20,12 @@ function declarationsService() {
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "sick-1", ...data, employee: { id: data.employeeId, fullName: "Employé Test" } })),
       findUnique: jest.fn(),
       update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "sick-1", employeeId: "emp-1", declaredById: "grh", employee: { id: "emp-1", fullName: "Employé Test" }, ...data })),
-      delete: jest.fn()
+      delete: jest.fn(),
+      count: jest.fn().mockResolvedValue(0)
     },
     leaveDeclaration: {
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: "leave-1", ...data, employee: { id: data.employeeId, fullName: "Employé Test" }, declaredBy: null, approvedBy: null })),
+      findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
       delete: jest.fn(),
@@ -43,16 +45,57 @@ function declarationsService() {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn()
     },
+    manualAbsenceDeclaration: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockImplementation(({ data }) => Promise.resolve({
+        id: "manual-1", ...data,
+        employee: { id: data.employeeId, fullName: "Employé Test" },
+        declaredBy: null, approvedBy: null
+      })),
+      update: jest.fn()
+    },
     attendanceSummaryRecord: { deleteMany: jest.fn(), updateMany: jest.fn() },
     annualLeaveBalance: { upsert: jest.fn().mockImplementation(({ create, update }) => Promise.resolve({ id: "bal-1", ...(create || update) })) },
     attendancePunch: { count: jest.fn() }
   };
   const audit = { record: jest.fn() };
   const notifications = { notify: jest.fn(), adminDrhUserIds: jest.fn().mockResolvedValue(["admin"]) };
-  return { service: new ManualDeclarationsService(prisma as any, audit as any, notifications as any), prisma };
+  const reports = { dailyAbsences: jest.fn().mockResolvedValue({ rows: [] }) };
+  return { service: new ManualDeclarationsService(prisma as any, audit as any, notifications as any, reports as any), prisma };
 }
 
 describe("ManualDeclarationsService", () => {
+  it("creates a responsable manual absence as pending when the principal module has no absence", async () => {
+    const { service, prisma } = declarationsService();
+    prisma.attendancePunch.count.mockResolvedValue(0);
+
+    await service.createManualAbsence({ employeeId: "emp-1", absenceDate: "2026-08-18", reason: "Absence signalée" }, manager as any);
+
+    expect(prisma.manualAbsenceDeclaration.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ employeeId: "emp-1", status: ApprovalStatus.PENDING_APPROVAL, declaredById: "manager" })
+    }));
+  });
+
+  it("refuses a manual declaration already present in the principal Absences module", async () => {
+    const { service, prisma } = declarationsService();
+    (service as any).reports.dailyAbsences.mockResolvedValue({ rows: [{ employee: { id: "emp-1" }, status: "ABSENT" }] });
+    prisma.attendancePunch.count.mockResolvedValue(0);
+
+    await expect(service.createManualAbsence({ employeeId: "emp-1", absenceDate: "2026-08-18", reason: "Doublon" }, manager as any))
+      .rejects.toThrow(BadRequestException);
+    expect(prisma.manualAbsenceDeclaration.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses a manual absence when a real punch exists", async () => {
+    const { service, prisma } = declarationsService();
+    prisma.attendancePunch.count.mockResolvedValue(1);
+
+    await expect(service.createManualAbsence({ employeeId: "emp-1", absenceDate: "2026-08-18", reason: "Erreur" }, manager as any))
+      .rejects.toThrow(BadRequestException);
+    expect(prisma.manualAbsenceDeclaration.create).not.toHaveBeenCalled();
+  });
+
   it("keeps GRH sickness pending, auto-approves Admin/DRH and rejects a responsable", async () => {
     const { service, prisma } = declarationsService();
     await service.createSickLeave({ employeeId: "emp-1", dateStart: "2026-07-01", dateEnd: "2026-07-02" }, grh as any);
@@ -95,6 +138,17 @@ describe("ManualDeclarationsService", () => {
     expect(prisma.leaveDeclaration.create).toHaveBeenLastCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: ApprovalStatus.PENDING_APPROVAL, approvedById: null })
     }));
+  });
+
+  it("refuses only an exact duplicate leave period", async () => {
+    const duplicate = declarationsService();
+    duplicate.prisma.leaveDeclaration.findFirst.mockResolvedValue({ id: "leave-existing", status: ApprovalStatus.APPROVED });
+    await expect(duplicate.service.createLeave({ employeeId: "emp-1", dateStart: "2026-08-12", dateEnd: "2026-08-26" }, grh as any)).rejects.toThrow("mêmes dates");
+    expect(duplicate.prisma.leaveDeclaration.create).not.toHaveBeenCalled();
+
+    const differentDates = declarationsService();
+    await differentDates.service.createLeave({ employeeId: "emp-1", dateStart: "2026-08-12", dateEnd: "2026-08-25" }, grh as any);
+    expect(differentDates.prisma.leaveDeclaration.create).toHaveBeenCalled();
   });
 
   it("lets the creator edit sickness and sends a GRH edit back to approval", async () => {
@@ -338,6 +392,13 @@ describe("AttendanceSummaryService", () => {
         status: AttendanceSummaryStatus.REST
       })
     }));
+  });
+
+  it("gives approved congé priority over a planned REPOS day", async () => {
+    const { service, prisma, tx } = summaryService([{ employee: { id: "emp-1" }, workDate: "2026-08-12", workedHours: 0, plannedShiftType: "REPOS", serviceStatus: "repos" }]);
+    prisma.leaveDeclaration.findMany.mockResolvedValue([{ employeeId: "emp-1", dateStart: new Date("2026-08-12T00:00:00.000Z"), dateEnd: new Date("2026-08-12T00:00:00.000Z"), leaveType: LeaveType.ANNUEL, exceptionalReason: null }]);
+    await service.generateForPeriod({ startDate: "2026-07-26", endDate: "2026-08-25" }, admin as any);
+    expect(tx.attendanceSummaryRecord.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: expect.objectContaining({ status: AttendanceSummaryStatus.LEAVE, shiftType: "REPOS" }) }));
   });
 
   it("does not convert empty planning days to absences", async () => {

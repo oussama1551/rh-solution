@@ -14,7 +14,7 @@ import { useApi } from "../lib/useApi";
 export function ValidationPage() {
   const flags = useApi<AttendanceFlag[]>("/api/attendance/flags/pending", []);
   const approvals = useApi<PlanningApprovals>("/api/attendance/planning-approvals", { groups: [], plannings: [], memberships: [] });
-  const declarations = useApi<ManualDeclarationApprovals>("/api/attendance/declarations/pending", { overtime: [], compensations: [], sickLeaves: [], leaves: [], absenceReversals: [] });
+  const declarations = useApi<ManualDeclarationApprovals>("/api/attendance/declarations/pending", { manualAbsences: [], overtime: [], compensations: [], sickLeaves: [], leaves: [], absenceReversals: [] });
   const [message, setMessage] = useState<string | null>(null);
   const [tab, setTab] = useState<"planning" | "declarations" | "attendance">("planning");
   const [dayPreview, setDayPreview] = useState<{ employeeId: string; employeeName: string; date: string } | null>(null);
@@ -72,13 +72,13 @@ export function ValidationPage() {
     approvals.reload();
   }
 
-  async function approveDeclaration(type: "overtime" | "compensations" | "sick-leaves" | "leaves" | "absence-reversals", id: string) {
+  async function approveDeclaration(type: "manual-absences" | "overtime" | "compensations" | "sick-leaves" | "leaves" | "absence-reversals", id: string) {
     await api(`/api/attendance/declarations/${type}/${id}/approve`, { method: "PATCH" });
     setMessage("Déclaration approuvée.");
     declarations.reload();
   }
 
-  async function rejectDeclaration(type: "overtime" | "compensations" | "sick-leaves" | "leaves" | "absence-reversals", id: string, reason: string) {
+  async function rejectDeclaration(type: "manual-absences" | "overtime" | "compensations" | "sick-leaves" | "leaves" | "absence-reversals", id: string, reason: string) {
     await api(`/api/attendance/declarations/${type}/${id}/reject`, { method: "PATCH", body: JSON.stringify({ reason }) });
     setMessage("Déclaration rejetée.");
     declarations.reload();
@@ -194,6 +194,27 @@ export function ValidationPage() {
           </div>
         ) : tab === "declarations" ? (
           <div className="stack">
+            <div className="panel-header">
+              <h2>Absences manuelles en attente</h2>
+              <span className="muted">{declarations.data.manualAbsences.length} demande(s)</span>
+            </div>
+            <DataTable
+              rows={declarations.data.manualAbsences}
+              empty="Aucune absence manuelle en attente."
+              columns={[
+                { key: "employee", header: "Employé", render: row => <strong>{row.employee.fullName}</strong>, sortValue: row => row.employee.fullName },
+                { key: "date", header: "Jour", render: row => new Date(row.absenceDate).toLocaleDateString("fr-FR"), sortValue: row => row.absenceDate },
+                { key: "reason", header: "Motif", render: row => row.reason },
+                { key: "by", header: "Déclaré par", render: row => row.declaredBy?.fullName || row.declaredBy?.username || "-" },
+                { key: "actions", header: "Actions", render: row => (
+                  <div className="row-actions">
+                    <Button variant="ghost" onClick={() => setDayPreview({ employeeId: row.employee.id, employeeName: row.employee.fullName, date: dateKey(row.absenceDate) })}><CalendarDays size={15} /> Voir journée</Button>
+                    <Button variant="primary" onClick={() => approveDeclaration("manual-absences", row.id)}><Check size={15} /> Approuver</Button>
+                    <Button variant="danger" onClick={() => openRejectModal("Rejeter l'absence manuelle", `${row.employee.fullName} - ${new Date(row.absenceDate).toLocaleDateString("fr-FR")}`, reason => rejectDeclaration("manual-absences", row.id, reason))}><X size={15} /> Rejeter</Button>
+                  </div>
+                ) }
+              ]}
+            />
             <div className="panel-header">
               <h2>Heures supplémentaires en attente</h2>
               <span className="muted">{declarations.data.overtime.length} demande(s)</span>

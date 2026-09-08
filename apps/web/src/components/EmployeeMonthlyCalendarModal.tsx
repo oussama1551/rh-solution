@@ -14,17 +14,19 @@ export function EmployeeMonthlyCalendarModal({
   month,
   from,
   to,
+  payrollVerification = false,
   onClose
 }: {
   employee: { id: string; name: string } | null;
   month?: string;
   from?: string;
   to?: string;
+  payrollVerification?: boolean;
   onClose: () => void;
 }) {
   const calendarPath = employee ? employeeCalendarPath(employee.id, month, from, to) : null;
   const calendar = useApi<AttendanceMonthlyCalendar | null>(calendarPath, null);
-  const [view, setView] = useState<"attendance" | "planning">("attendance");
+  const [view, setView] = useState<"attendance" | "planning" | "combined">("attendance");
 
   useEffect(() => setView("attendance"), [employee?.id, month, from, to]);
 
@@ -41,9 +43,9 @@ export function EmployeeMonthlyCalendarModal({
           <div className="row-actions no-print">
             {calendar.data && (
               <div className="calendar-view-switch" role="group" aria-label="Mode du calendrier">
-                <Button variant={view === "attendance" ? "primary" : "secondary"} onClick={() => setView("attendance")}><ScanLine size={15} /> Pointages</Button>
-                <Button variant={view === "planning" ? "primary" : "secondary"} onClick={() => setView("planning")} disabled={calendar.data.planning.length === 0} title={calendar.data.planning.length === 0 ? "Aucun planning affecté sur cette période" : "Afficher le planning affecté"}>
-                  <CalendarDays size={15} /> {calendar.data.planning.length === 0 ? "Aucun planning affecté" : `Planning affecté (${calendar.data.planning.length})`}
+                <Button variant={view === "attendance" ? "primary" : "secondary"} onClick={() => setView("attendance")}><ScanLine size={15} /> {payrollVerification ? "Pointages réels seuls" : "Pointages"}</Button>
+                <Button variant={(payrollVerification ? view === "combined" : view === "planning") ? "primary" : "secondary"} onClick={() => setView(payrollVerification ? "combined" : "planning")} disabled={calendar.data.planning.length === 0} title={calendar.data.planning.length === 0 ? "Aucun planning affecté sur cette période" : "Afficher le planning affecté"}>
+                  <CalendarDays size={15} /> {calendar.data.planning.length === 0 ? "Aucun planning affecté" : payrollVerification ? "Pointages + shifts" : `Planning affecté (${calendar.data.planning.length})`}
                 </Button>
               </div>
             )}
@@ -52,7 +54,7 @@ export function EmployeeMonthlyCalendarModal({
           </div>
         </div>
         {calendar.loading && <LoadingState label="Chargement du calendrier mensuel..." />}
-        {calendar.data && <AttendanceCalendar data={calendar.data} view={view} />}
+        {calendar.data && <AttendanceCalendar data={calendar.data} view={view} payrollVerification={payrollVerification} />}
       </div>
     </div>
   );
@@ -65,7 +67,7 @@ function employeeCalendarPath(employeeId: string, month?: string, from?: string,
   return `/api/attendance/employees/${employeeId}/monthly-calendar?${params.toString()}`;
 }
 
-function AttendanceCalendar({ data, view }: { data: AttendanceMonthlyCalendar; view: "attendance" | "planning" }) {
+function AttendanceCalendar({ data, view, payrollVerification }: { data: AttendanceMonthlyCalendar; view: "attendance" | "planning" | "combined"; payrollVerification: boolean }) {
   const byDate = new Map(data.days.map(day => [day.workDate, day]));
   const planningByDate = new Map(data.planning.map(day => [day.date, day]));
   const days = data.period?.days || periodDays(payrollPeriod(data.month).from, payrollPeriod(data.month).to);
@@ -73,7 +75,7 @@ function AttendanceCalendar({ data, view }: { data: AttendanceMonthlyCalendar; v
 
   return (
     <>
-      {view === "attendance" ? <div className="attendance-summary-strip compact">
+      {view !== "planning" ? <div className="attendance-summary-strip compact">
         <div><span>Jours</span><strong>{data.totals.workedDays}</strong></div>
         <div><span>Heures</span><strong>{hoursLabel(data.totals.totalHours)}</strong></div>
         <div><span>Heures sup.</span><strong>{hoursLabel(data.totals.overtimeHours || 0)}</strong></div>
@@ -87,8 +89,8 @@ function AttendanceCalendar({ data, view }: { data: AttendanceMonthlyCalendar; v
         <div><span>Individuel</span><strong>{data.planning.filter(day => day.assignedVia === "individual").length}</strong></div>
         <div><span>Groupe</span><strong>{data.planning.filter(day => day.assignedVia === "group").length}</strong></div>
       </div>}
-      {view === "attendance" && !data.summaryAvailable && <div className="alert">Synthèse non générée pour cette période: le calendrier affiche seulement les jours avec pointages.</div>}
-      {view === "attendance" && <AttendanceStatusLegend />}
+      {view !== "planning" && !data.summaryAvailable && <div className="alert">Synthèse non générée pour cette période: le calendrier affiche seulement les jours avec pointages.</div>}
+      {view !== "planning" && <AttendanceStatusLegend />}
       <div className="attendance-calendar">
         {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map(day => <div className="calendar-head" key={day}>{day}</div>)}
         {cells.map(cell => {
@@ -96,9 +98,9 @@ function AttendanceCalendar({ data, view }: { data: AttendanceMonthlyCalendar; v
           const planned = cell.date ? planningByDate.get(cell.date) : null;
           const status = day?.summaryStatus || null;
           return (
-            <div key={cell.key} className={`calendar-day ${view === "attendance" && day ? `calendar-${day.timing.toLowerCase()}` : ""} ${view === "attendance" && status ? `report-status-${attendanceStatusClass(status)}` : ""} ${view === "planning" && planned ? "planning-assigned-day" : ""}`}>
+            <div key={cell.key} className={`calendar-day ${view !== "planning" && day ? `calendar-${day.timing.toLowerCase()}` : ""} ${view !== "planning" && status ? `report-status-${attendanceStatusClass(status)}` : ""} ${(view === "planning" || view === "combined") && planned ? "planning-assigned-day" : ""}`}>
               {cell.date && <><strong>{cell.day}</strong><small>{cell.month}</small></>}
-              {view === "attendance" && day && (
+              {view !== "planning" && day && (
                 <>
                   <AttendanceStatusBadge status={status || (day.isIncomplete ? "INCOMPLETE" : "PRESENT")} />
                   <span>{timingLabels[day.timing]}</span>
@@ -112,9 +114,12 @@ function AttendanceCalendar({ data, view }: { data: AttendanceMonthlyCalendar; v
                     </small>
                   )}
                   <small>{day.isIncomplete ? "Incomplet" : hoursLabel(day.workedHours)}</small>
+                  {payrollVerification && (status === "SICK" || status === "LEAVE") && Boolean(day.firstPunchTime || day.declarationFirstPunchTime) && <span className="badge badge-red">Attention : pointage + {status === "SICK" ? "maladie" : "congé"}</span>}
                   {(day.overtimeHours || 0) > 0 && <small className="overtime-calendar-line">Sup: {hoursLabel(day.overtimeHours || 0)}</small>}
                 </>
               )}
+              {payrollVerification && view !== "planning" && cell.date && !day && <span className="badge badge-gray">Sans pointage</span>}
+              {view === "combined" && planned && <small className="badge badge-blue">Shift : {shiftLabels[planned.shiftType]} · {planned.startTime && planned.endTime ? `${planned.startTime}-${planned.endTime}` : "Repos"}</small>}
               {view === "planning" && planned && (
                 <>
                   <span className={`badge ${planned.shiftType === "REPOS" ? "badge-gray" : "badge-blue"}`}>{shiftLabels[planned.shiftType]}</span>

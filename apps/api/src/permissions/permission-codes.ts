@@ -21,7 +21,18 @@ export const PermissionCode = {
   ReportsExport: "reports.export",
   PayrollControl: "payroll.control",
   SyncRun: "sync.run",
-  AuditRead: "audit.read"
+  AuditRead: "audit.read",
+  JobDescriptionView: "job_description.view",
+  JobDescriptionCreate: "job_description.create",
+  JobDescriptionEdit: "job_description.edit",
+  JobDescriptionArchive: "job_description.archive",
+  JobDescriptionValidate: "job_description.validate",
+  JobDescriptionGenerate: "job_description.generate",
+  JobTemplateManage: "job_template.manage",
+  MissionLibraryManage: "mission_library.manage",
+  CompanyBrandingManage: "company_branding.manage",
+  StampManage: "stamp.manage",
+  SignatureManage: "signature.manage"
 } as const;
 
 export type PermissionCode = (typeof PermissionCode)[keyof typeof PermissionCode];
@@ -36,7 +47,7 @@ export const ALL_PERMISSIONS = [
   { code: PermissionCode.EmployeesRead, module: "employees", action: "read", description: "Voir les employés" },
   { code: PermissionCode.EmployeesManage, module: "employees", action: "manage", description: "Modifier les données employés locales" },
   { code: PermissionCode.OrgRead, module: "org", action: "read", description: "Voir l'organigramme" },
-  { code: PermissionCode.OrgManage, module: "org", action: "manage", description: "Gérer groupes et rattachements" },
+  { code: PermissionCode.OrgManage, module: "org", action: "manage", description: "Gérer les groupes et les rattachements employés" },
   { code: PermissionCode.OrgStructureManage, module: "org", action: "structure.manage", description: "Créer, modifier et supprimer unités et sous-unités" },
   { code: PermissionCode.ShiftsRead, module: "shifts", action: "read", description: "Voir les shifts" },
   { code: PermissionCode.ShiftsManage, module: "shifts", action: "manage", description: "Créer et modifier les shifts" },
@@ -47,7 +58,18 @@ export const ALL_PERMISSIONS = [
   { code: PermissionCode.DevicesRead, module: "devices", action: "read", description: "Voir les terminaux" },
   { code: PermissionCode.ReportsRead, module: "reports", action: "read", description: "Voir les rapports" },
   { code: PermissionCode.ReportsExport, module: "reports", action: "export", description: "Exporter les rapports" },
-  { code: PermissionCode.PayrollControl, module: "payroll", action: "control", description: "Importer et comparer les rubriques de paie SAP" },
+  { code: PermissionCode.PayrollControl, module: "payroll", action: "control", description: "Accéder au Contrôle paie et effectuer les vérifications manuelles" },
   { code: PermissionCode.SyncRun, module: "sync", action: "run", description: "Lancer une synchronisation ZKTeco" },
-  { code: PermissionCode.AuditRead, module: "audit", action: "read", description: "Lire le journal d'audit" }
+  { code: PermissionCode.AuditRead, module: "audit", action: "read", description: "Lire le journal d'audit" },
+  { code: PermissionCode.JobDescriptionView, module: "job_description", action: "view", description: "Voir les fiches de poste" },
+  { code: PermissionCode.JobDescriptionCreate, module: "job_description", action: "create", description: "Créer une fiche de poste" },
+  { code: PermissionCode.JobDescriptionEdit, module: "job_description", action: "edit", description: "Modifier les brouillons de fiches de poste" },
+  { code: PermissionCode.JobDescriptionArchive, module: "job_description", action: "archive", description: "Archiver une fiche de poste" },
+  { code: PermissionCode.JobDescriptionValidate, module: "job_description", action: "validate", description: "Valider une fiche ou un template de poste" },
+  { code: PermissionCode.JobDescriptionGenerate, module: "job_description", action: "generate", description: "Finaliser et générer une fiche de poste" },
+  { code: PermissionCode.JobTemplateManage, module: "job_template", action: "manage", description: "Gérer la bibliothèque et les templates de postes" },
+  { code: PermissionCode.MissionLibraryManage, module: "mission_library", action: "manage", description: "Gérer la bibliothèque de missions" },
+  { code: PermissionCode.CompanyBrandingManage, module: "company_branding", action: "manage", description: "Gérer les sociétés et leur identité visuelle" },
+  { code: PermissionCode.StampManage, module: "stamp", action: "manage", description: "Gérer les cachets numériques (fonction désactivée en V1)" },
+  { code: PermissionCode.SignatureManage, module: "signature", action: "manage", description: "Gérer les signatures numériques (fonction désactivée en V1)" }
 ] as const;

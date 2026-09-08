@@ -11,6 +11,6 @@ import { PayrollControlService } from "./payroll-control.service";
   imports: [SyncModule],
   controllers: [SapDirectoryController, PayrollControlController],
   providers: [SapHanaClientService, SapDirectoryCacheService, SapDirectoryService, PayrollControlService],
-  exports: [SapDirectoryService, SapDirectoryCacheService]
+  exports: [SapDirectoryService, SapDirectoryCacheService, SapHanaClientService]
 })
 export class SapModule {}

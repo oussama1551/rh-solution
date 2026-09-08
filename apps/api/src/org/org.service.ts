@@ -847,6 +847,8 @@ export class OrgService {
   }
 
   private async requiresMembershipApproval(actor: RequestUser, groupIds: Array<string | null | undefined>) {
+    if (actor.roles.includes(RoleCode.ResponsablePlanningGroupes)) return false;
+
     const approval = approvalFor(actor);
     if (approval.status === ApprovalStatus.APPROVED) return false;
 

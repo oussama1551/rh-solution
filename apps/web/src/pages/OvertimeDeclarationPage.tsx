@@ -7,7 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { Employee, OvertimeDeclaration, OvertimeRateType } from "../lib/types";
+import { Employee, OvertimeDeclaration, OvertimeEmployeeTotal, OvertimeRateType } from "../lib/types";
 import { useApi, useSessionFilters } from "../lib/useApi";
 
 export function OvertimeDeclarationPage() {
@@ -28,6 +28,7 @@ export function OvertimeDeclarationPage() {
     ? `/api/attendance/declarations/overtime?employeeId=${encodeURIComponent(filters.employeeId)}`
     : "/api/attendance/declarations/overtime";
   const history = useApi<OvertimeDeclaration[]>(historyPath, []);
+  const employeeTotals = useApi<OvertimeEmployeeTotal[]>("/api/attendance/declarations/overtime/by-employee", []);
 
   const filteredEmployees = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -39,6 +40,14 @@ export function OvertimeDeclarationPage() {
   }, [employees.data, filters.search]);
 
   const selectedEmployee = employees.data.find(employee => employee.id === filters.employeeId) || null;
+  const visibleEmployeeTotals = useMemo(() => {
+    const search = filters.search.trim().toLowerCase();
+    return employeeTotals.data.filter(row => {
+      if (filters.employeeId && row.employee.id !== filters.employeeId) return false;
+      if (!search) return true;
+      return `${row.employee.fullName} ${displayCode(row.employee)} ${row.employee.department || ""}`.toLowerCase().includes(search);
+    });
+  }, [employeeTotals.data, filters.employeeId, filters.search]);
   const isAdmin = Boolean(user?.roles.includes("ADMIN"));
 
   async function submit(event: FormEvent) {
@@ -68,6 +77,7 @@ export function OvertimeDeclarationPage() {
         : "Heures supplémentaires enregistrées et approuvées.");
       update({ reason: "" });
       history.reload();
+      employeeTotals.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Déclaration impossible.");
     } finally {
@@ -85,6 +95,7 @@ export function OvertimeDeclarationPage() {
       await api(`/api/attendance/declarations/overtime/${row.id}`, { method: "DELETE" });
       setMessage("Déclaration heures supplémentaires supprimée. Régénérez la synthèse paie si elle était déjà calculée.");
       history.reload();
+      employeeTotals.reload();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Suppression impossible.");
     }
@@ -150,6 +161,32 @@ export function OvertimeDeclarationPage() {
             {saving ? "Envoi..." : "Déclarer"}
           </Button>
         </form>
+
+        <div className="panel-header">
+          <div>
+            <h2>Heures supplémentaires de mes employés</h2>
+            <span className="muted">Tous les employés de votre périmètre, y compris ceux sans déclaration</span>
+          </div>
+          <span className="muted">{visibleEmployeeTotals.length} employé(s)</span>
+        </div>
+        <DataTable
+          rows={visibleEmployeeTotals}
+          loading={employeeTotals.loading}
+          loadingLabel="Chargement des employés et des heures supplémentaires..."
+          empty="Aucun employé dans votre périmètre."
+          pageSize={40}
+          columns={[
+            { key: "employee", header: "Employé", render: row => <div className="table-main-cell"><strong>{row.employee.fullName}</strong><span>{displayCode(row.employee)}</span></div>, sortValue: row => row.employee.fullName },
+            { key: "department", header: "Département", render: row => row.employee.department || "-", sortValue: row => row.employee.department || "" },
+            { key: "count", header: "Déclarations", render: row => row.declarationCount, sortValue: row => row.declarationCount },
+            { key: "pending", header: "En attente", render: row => row.pendingCount ? <span className="badge badge-orange">{row.pendingCount}</span> : "0", sortValue: row => row.pendingCount },
+            { key: "rate50", header: "Sup. 50%", render: row => `${row.rate50} h`, sortValue: row => row.rate50 },
+            { key: "rate75", header: "Sup. 75%", render: row => `${row.rate75} h`, sortValue: row => row.rate75 },
+            { key: "rate100", header: "Sup. 100%", render: row => `${row.rate100} h`, sortValue: row => row.rate100 },
+            { key: "total", header: "Total heures", render: row => <strong>{row.total} h</strong>, sortValue: row => row.total },
+            { key: "action", header: "Action", render: row => <Button variant="secondary" onClick={() => update({ employeeId: row.employee.id, search: "" })}>Voir le détail</Button> }
+          ]}
+        />
 
         <div className="panel-header">
           <h2>Heures supplémentaires déclarées</h2>

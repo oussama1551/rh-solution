@@ -11,6 +11,7 @@ import { BioTimeRecord } from "../sync/biotime.types";
 import { BioTimeClientService } from "../sync/biotime-client.service";
 import { dateField as bioTimeDateField } from "../sync/biotime-mapper";
 import { BioTimeEmployeeDto } from "./dto/biotime-employee.dto";
+import { AttendanceExemptionDto, EmployeeContractDto } from "./dto/employee-contract.dto";
 import { ResignEmployeeDto } from "./dto/resign-employee.dto";
 import { UpdateLocalMatriculeDto } from "./dto/update-local-matricule.dto";
 
@@ -22,6 +23,38 @@ export class EmployeesService {
     private readonly biotime?: BioTimeClientService,
     private readonly config?: ConfigService
   ) {}
+
+  async listContracts(actor: RequestUser) {
+    this.ensureContractManager(actor);
+    return this.prisma.employee.findMany({ where: { status: "ACTIVE" }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true, localMatricule: true, biotimeCode: true, employeeCode: true, department: true, attendanceTrackingExempt: true, attendanceExemptReason: true, attendanceExemptAt: true, attendanceExemptBy: { select: { id: true, fullName: true, username: true } }, contracts: { orderBy: { startDate: "desc" }, include: { createdBy: { select: { id: true, fullName: true, username: true } }, updatedBy: { select: { id: true, fullName: true, username: true } } } } } });
+  }
+
+  async createContract(dto: EmployeeContractDto, actor: RequestUser) {
+    this.ensureContractManager(actor); this.validateContractDates(dto);
+    await this.ensureNoContractOverlap(dto.employeeId, dto.startDate, dto.endDate);
+    const row = await this.prisma.employeeContract.create({ data: { employeeId: dto.employeeId, startDate: new Date(dto.startDate), endDate: dto.endDate ? new Date(dto.endDate) : null, contractType: dto.contractType?.trim() || null, reference: dto.reference?.trim() || null, note: dto.note?.trim() || null, createdById: actor.id, updatedById: actor.id } });
+    await this.audit.record({ userId: actor.id, action: "employee_contract.create", entityType: "employee_contract", entityId: row.id, after: row as Prisma.InputJsonValue }); return row;
+  }
+
+  async updateContract(id: string, dto: EmployeeContractDto, actor: RequestUser) {
+    this.ensureContractManager(actor); this.validateContractDates(dto);
+    const before = await this.prisma.employeeContract.findUnique({ where: { id } }); if (!before) throw new NotFoundException("Contrat introuvable.");
+    await this.ensureNoContractOverlap(dto.employeeId, dto.startDate, dto.endDate, id);
+    const row = await this.prisma.employeeContract.update({ where: { id }, data: { employeeId: dto.employeeId, startDate: new Date(dto.startDate), endDate: dto.endDate ? new Date(dto.endDate) : null, contractType: dto.contractType?.trim() || null, reference: dto.reference?.trim() || null, note: dto.note?.trim() || null, updatedById: actor.id } });
+    await this.audit.record({ userId: actor.id, action: "employee_contract.update", entityType: "employee_contract", entityId: id, before: before as Prisma.InputJsonValue, after: row as Prisma.InputJsonValue }); return row;
+  }
+
+  async setAttendanceExemption(employeeId: string, dto: AttendanceExemptionDto, actor: RequestUser) {
+    if (!actor.roles.includes(RoleCode.Admin)) throw new ForbiddenException("Seul Admin peut modifier l'exception de suivi de présence.");
+    if (dto.exempt && !dto.reason?.trim()) throw new BadRequestException("Le motif de l'exception est obligatoire.");
+    const row = await this.prisma.employee.update({ where: { id: employeeId }, data: { attendanceTrackingExempt: dto.exempt, attendanceExemptReason: dto.exempt ? dto.reason!.trim() : null, attendanceExemptAt: dto.exempt ? new Date() : null, attendanceExemptById: dto.exempt ? actor.id : null } }).catch(() => null);
+    if (!row) throw new NotFoundException("Employé introuvable.");
+    await this.audit.record({ userId: actor.id, action: dto.exempt ? "employee.attendance_exempt" : "employee.attendance_restore", entityType: "employee", entityId: employeeId, metadata: { reason: dto.reason || null } }); return row;
+  }
+
+  private ensureContractManager(actor: RequestUser) { if (![RoleCode.Admin, RoleCode.DRH, RoleCode.GRH].some(role => actor.roles.includes(role))) throw new ForbiddenException("Gestion des contrats réservée à Admin, DRH et GRH."); }
+  private validateContractDates(dto: EmployeeContractDto) { if (dto.endDate && dto.endDate < dto.startDate) throw new BadRequestException("La date de fin doit être après la date de début."); }
+  private async ensureNoContractOverlap(employeeId: string, startDate: string, endDate?: string, excludeId?: string) { const overlap = await this.prisma.employeeContract.findFirst({ where: { employeeId, ...(excludeId ? { id: { not: excludeId } } : {}), startDate: { lte: new Date(endDate || "9999-12-31") }, OR: [{ endDate: null }, { endDate: { gte: new Date(startDate) } }] } }); if (overlap) throw new BadRequestException("Cette période chevauche déjà un autre contrat de l'employé."); }
 
   async list(actor?: RequestUser) {
     const employees = await this.prisma.employee.findMany({
@@ -262,6 +295,15 @@ export class EmployeesService {
     };
   }
 
+  async latestBioTimeEmployeeCode(actor: RequestUser) {
+    this.ensureBioTimeWriter(actor);
+    const employees = await this.biotime!.listEmployees();
+    const codes = employees.map(row => stringField(row, ["emp_code", "employee_code", "code", "pin", "badgenumber"])).filter(Boolean);
+    const numericCodes = codes.map(code => Number(code)).filter(value => Number.isSafeInteger(value) && value >= 0);
+    const lastNumber = numericCodes.length ? Math.max(...numericCodes) : null;
+    return { lastCode: lastNumber === null ? codes.at(-1) || null : String(lastNumber), nextCode: lastNumber === null ? null : String(lastNumber + 1), employeeCount: employees.length };
+  }
+
   async createInBioTime(dto: BioTimeEmployeeDto, actor: RequestUser) {
     this.ensureBioTimeWriter(actor);
     const empCode = dto.empCode?.trim();
@@ -270,6 +312,13 @@ export class EmployeesService {
     }
     if (!dto.department?.trim()) {
       throw new BadRequestException("Le département BioTime est obligatoire.");
+    }
+
+    if (!dto.hireDate) {
+      throw new BadRequestException("La date de début du contrat est obligatoire.");
+    }
+    if (dto.contractEndDate && dto.contractEndDate < dto.hireDate) {
+      throw new BadRequestException("La fin du contrat doit être après sa date de début.");
     }
 
     const existing = await this.prisma.employee.findFirst({
@@ -289,6 +338,18 @@ export class EmployeesService {
       const payload = this.toBioTimePayload(dto, true);
       const response = await this.biotime!.createEmployee(payload);
       const employee = await this.upsertLocalFromBioTime(response, payload);
+      const contract = await this.prisma.employeeContract.create({
+        data: {
+          employeeId: employee.id,
+          startDate: new Date(dto.hireDate),
+          endDate: dto.contractEndDate ? new Date(dto.contractEndDate) : null,
+          contractType: dto.contractType?.trim() || null,
+          reference: dto.contractReference?.trim() || null,
+          note: dto.contractNote?.trim() || null,
+          createdById: actor.id,
+          updatedById: actor.id
+        }
+      });
       await this.audit.record({
         userId: actor.id,
         action: "employee.create",
@@ -296,6 +357,7 @@ export class EmployeesService {
         entityId: employee.id,
         after: employee as unknown as Prisma.InputJsonValue
       });
+      await this.audit.record({ userId: actor.id, action: "employee_contract.create", entityType: "employee_contract", entityId: contract.id, after: contract as Prisma.InputJsonValue, metadata: { source: "employee.create" } });
       return this.withPresentationFields(employee);
     } catch (error) {
       throw this.bioTimeWriteError(error, "Création BioTime refusée.");
@@ -611,14 +673,21 @@ export class EmployeesService {
       if (value !== null) payload[target] = value as string | number | boolean;
     };
 
-    if (creating) assign("emp_code", dto.empCode);
+    if (creating) {
+      assign("emp_code", dto.empCode);
+      // ZKBioTime 9.0.3 accesses card_no directly in its create serializer.
+      // The field is optional in the UI, but it must still be present in the
+      // JSON payload; existing BioTime employees use null when no card exists.
+      payload.card_no = null;
+    }
     assign("first_name", dto.firstName);
     assign("last_name", dto.lastName);
     assign("department", dto.department);
     assign("position", dto.position);
     assign("employment_type", dto.employmentType);
     assign("hire_date", dto.hireDate);
-    assign("area", dto.area);
+    if (dto.area?.trim().toUpperCase() === "ZONE FABCOM") payload.area = [2];
+    else if (dto.area?.trim()) payload.area = dto.area.split(",").map(value => value.trim()).filter(Boolean);
     assign("superior", dto.superior);
     assign("workflow_role", dto.workflowRole);
     assign("local_name", dto.localName);

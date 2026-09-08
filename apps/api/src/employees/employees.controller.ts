@@ -6,6 +6,7 @@ import { Permissions } from "../auth/decorators/permissions.decorator";
 import { RequestUser } from "../common/request-user.type";
 import { PermissionCode } from "../permissions/permission-codes";
 import { BioTimeEmployeeDto } from "./dto/biotime-employee.dto";
+import { AttendanceExemptionDto, EmployeeContractDto } from "./dto/employee-contract.dto";
 import { ResignEmployeeDto } from "./dto/resign-employee.dto";
 import { EmployeesService } from "./employees.service";
 
@@ -19,10 +20,32 @@ export class EmployeesController {
     return this.employees.list(actor);
   }
 
+  @Get("contracts/all")
+  @Permissions(PermissionCode.EmployeesManage)
+  contracts(@CurrentUser() actor: RequestUser) { return this.employees.listContracts(actor); }
+
+  @Post("contracts")
+  @Permissions(PermissionCode.EmployeesManage)
+  createContract(@Body() dto: EmployeeContractDto, @CurrentUser() actor: RequestUser) { return this.employees.createContract(dto, actor); }
+
+  @Patch("contracts/:contractId")
+  @Permissions(PermissionCode.EmployeesManage)
+  updateContract(@Param("contractId") contractId: string, @Body() dto: EmployeeContractDto, @CurrentUser() actor: RequestUser) { return this.employees.updateContract(contractId, dto, actor); }
+
+  @Patch(":id/attendance-exemption")
+  @Permissions(PermissionCode.EmployeesManage)
+  attendanceExemption(@Param("id") id: string, @Body() dto: AttendanceExemptionDto, @CurrentUser() actor: RequestUser) { return this.employees.setAttendanceExemption(id, dto, actor); }
+
   @Get("biotime/departments")
   @Permissions(PermissionCode.EmployeesManage)
   biotimeDepartments() {
     return this.employees.biotimeDepartments();
+  }
+
+  @Get("biotime/latest-code")
+  @Permissions(PermissionCode.EmployeesManage)
+  latestBioTimeCode(@CurrentUser() actor: RequestUser) {
+    return this.employees.latestBioTimeEmployeeCode(actor);
   }
 
   @Get("emp-code/exists")

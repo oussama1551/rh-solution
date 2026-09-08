@@ -30,9 +30,10 @@ export class AttendanceSummaryService {
     const scopedFilters = { ...analysisFilters, status: filters.status || EmployeeStatus.ACTIVE };
     const [pointages, scopedEmployees] = await Promise.all([
       this.reports.pointagePlanning(scopedFilters, actor),
-      this.prisma.employee.findMany({ where: (this.reports as any).employeeWhere(scopedFilters, actor), select: { id: true } })
+      this.prisma.employee.findMany({ where: (this.reports as any).employeeWhere(scopedFilters, actor), select: { id: true, contracts: { select: { startDate: true, endDate: true }, orderBy: { startDate: "asc" } } } })
     ]);
     const employeeIds = [...new Set(scopedEmployees.map(employee => employee.id))];
+    const contractsByEmployee = new Map(scopedEmployees.map(employee => [employee.id, employee.contracts]));
     if (!employeeIds.length) return { generatedAt, periodStart: filters.startDate, periodEnd: requestedEndDate, analysisThrough: analysisEndDate, records: 0 };
 
     const from = parseDateKey(filters.startDate);
@@ -120,24 +121,25 @@ export class AttendanceSummaryService {
       for (const row of pointages) {
         const key = `${row.employee.id}:${row.workDate}`;
         writtenKeys.add(key);
+        const boundaryStatus = contractBoundaryStatus(contractsByEmployee.get(row.employee.id) || [], row.workDate);
         const isSick = sickDates.has(key);
         const isLeave = leaveDates.has(key);
         const isCompensation = compensationDates.has(key);
-        const overtimeHours = overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
-        const baseStatus = row.plannedShiftType === "REPOS"
-          ? AttendanceSummaryStatus.REST
-          : isSick
+        const overtimeHours = boundaryStatus ? { total: 0, rate50: 0, rate75: 0, rate100: 0 } : overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
+        const baseStatus = boundaryStatus || (isSick
           ? AttendanceSummaryStatus.SICK
           : isLeave
           ? AttendanceSummaryStatus.LEAVE
+          : row.plannedShiftType === "REPOS"
+          ? AttendanceSummaryStatus.REST
           : isCompensation
             ? AttendanceSummaryStatus.COMPENSATED
-            : summaryStatusFromService(row.serviceStatus);
+            : summaryStatusFromService(row.serviceStatus));
         const status = baseStatus === AttendanceSummaryStatus.ABSENT && absenceReversalDates.has(key)
           ? AttendanceSummaryStatus.ABSENCE_REVERSED
           : baseStatus;
         const leaveDetails = status === AttendanceSummaryStatus.LEAVE ? leaveDetailsByEmployeeDate.get(key) || null : null;
-        const workedHours = status === AttendanceSummaryStatus.SICK ? 0 : row.workedHours || 0;
+        const workedHours = status === AttendanceSummaryStatus.SICK || boundaryStatus ? 0 : row.workedHours || 0;
         await tx.attendanceSummaryRecord.upsert({
           where: { employeeId_workDate_periodStart_periodEnd: { employeeId: row.employee.id, workDate: parseDateKey(row.workDate), periodStart: from, periodEnd } },
           update: {
@@ -297,6 +299,20 @@ export class AttendanceSummaryService {
         });
         count += 1;
       }
+
+      for (const employee of scopedEmployees) {
+        for (const workDate of enumerateDateKeys(filters.startDate, analysisEndDate)) {
+          const status = contractBoundaryStatus(employee.contracts || [], workDate);
+          const key = `${employee.id}:${workDate}`;
+          if (!status || writtenKeys.has(key)) continue;
+          await tx.attendanceSummaryRecord.upsert({
+            where: { employeeId_workDate_periodStart_periodEnd: { employeeId: employee.id, workDate: parseDateKey(workDate), periodStart: from, periodEnd } },
+            update: { status, workedHours: new Prisma.Decimal(0), overtimeHours: new Prisma.Decimal(0), overtimeHoursRate50: new Prisma.Decimal(0), overtimeHoursRate75: new Prisma.Decimal(0), overtimeHoursRate100: new Prisma.Decimal(0), isCompensation: false, leaveType: null, exceptionalReason: null, shiftType: null, generatedAt, periodStart: from, periodEnd },
+            create: { employeeId: employee.id, workDate: parseDateKey(workDate), status, workedHours: new Prisma.Decimal(0), overtimeHours: new Prisma.Decimal(0), overtimeHoursRate50: new Prisma.Decimal(0), overtimeHoursRate75: new Prisma.Decimal(0), overtimeHoursRate100: new Prisma.Decimal(0), isCompensation: false, shiftType: null, generatedAt, periodStart: from, periodEnd }
+          });
+          writtenKeys.add(key); count += 1;
+        }
+      }
     }, { maxWait: 10_000, timeout: 120_000 });
 
     await this.audit.record({
@@ -354,6 +370,8 @@ export class AttendanceSummaryService {
         absenceReversedDays: 0,
         restDays: 0,
         incompleteDays: 0,
+        contractNotStartedDays: 0,
+        contractEndedDays: 0,
         totalWorkedHours: 0,
         totalOvertimeHours: 0,
         overtimeHoursRate50: 0,
@@ -369,6 +387,8 @@ export class AttendanceSummaryService {
       if (record.status === AttendanceSummaryStatus.ABSENCE_REVERSED) row.absenceReversedDays += 1;
       if (record.status === AttendanceSummaryStatus.REST) row.restDays += 1;
       if (record.status === AttendanceSummaryStatus.INCOMPLETE) row.incompleteDays += 1;
+      if (record.status === AttendanceSummaryStatus.CONTRACT_NOT_STARTED) row.contractNotStartedDays += 1;
+      if (record.status === AttendanceSummaryStatus.CONTRACT_ENDED) row.contractEndedDays += 1;
       row.totalWorkedHours += Number(record.workedHours);
       row.totalOvertimeHours += Number(record.overtimeHours);
       row.overtimeHoursRate50 += Number(record.overtimeHoursRate50);
@@ -401,6 +421,7 @@ export class AttendanceSummaryService {
 
     return records.map(record => ({
       id: record.id,
+      employeeId: record.employeeId,
       workDate: toDateKey(record.workDate),
       status: record.status,
       workedHours: Number(record.workedHours),
@@ -442,6 +463,13 @@ function minDate(left: string, right: string) {
 
 function maxDate(left: string, right: string) {
   return left > right ? left : right;
+}
+
+export function contractBoundaryStatus(contracts: Array<{ startDate: Date; endDate: Date | null }>, date: string): AttendanceSummaryStatus | null {
+  if (!contracts.length) return null;
+  const active = contracts.some(contract => toDateKey(contract.startDate) <= date && (!contract.endDate || toDateKey(contract.endDate) >= date));
+  if (active) return null;
+  return date < toDateKey(contracts[0].startDate) ? AttendanceSummaryStatus.CONTRACT_NOT_STARTED : AttendanceSummaryStatus.CONTRACT_ENDED;
 }
 
 function round2(value: number) {

@@ -46,7 +46,16 @@ export const DEFAULT_ROLES = [
       PermissionCode.ReportsRead,
       PermissionCode.ReportsExport,
       PermissionCode.PayrollControl,
-      PermissionCode.AuditRead
+      PermissionCode.AuditRead,
+      PermissionCode.JobDescriptionView,
+      PermissionCode.JobDescriptionCreate,
+      PermissionCode.JobDescriptionEdit,
+      PermissionCode.JobDescriptionArchive,
+      PermissionCode.JobDescriptionValidate,
+      PermissionCode.JobDescriptionGenerate,
+      PermissionCode.JobTemplateManage,
+      PermissionCode.MissionLibraryManage,
+      PermissionCode.CompanyBrandingManage
     ]
   },
   {
@@ -62,7 +71,13 @@ export const DEFAULT_ROLES = [
       PermissionCode.AttendanceBlocksCreate,
       PermissionCode.AttendanceBlocksManage,
       PermissionCode.ReportsRead,
-      PermissionCode.ReportsExport
+      PermissionCode.ReportsExport,
+      PermissionCode.PayrollControl,
+      PermissionCode.JobDescriptionView,
+      PermissionCode.JobDescriptionCreate,
+      PermissionCode.JobDescriptionEdit,
+      PermissionCode.JobDescriptionGenerate,
+      PermissionCode.MissionLibraryManage
     ]
   },
   {
@@ -72,12 +87,20 @@ export const DEFAULT_ROLES = [
     permissions: [
       PermissionCode.EmployeesRead,
       PermissionCode.OrgRead,
-      PermissionCode.OrgManage,
       PermissionCode.ShiftsRead,
-      PermissionCode.ShiftsManage,
       PermissionCode.AttendanceRead,
       PermissionCode.AttendanceBlocksCreate,
-      PermissionCode.ReportsRead
+      PermissionCode.ReportsRead,
+      PermissionCode.JobDescriptionView
+    ]
+  },
+  {
+    code: RoleCode.ResponsablePlanningGroupes,
+    name: "Responsable planning groupes",
+    description: "Droit complémentaire individuel pour les rattachements employés et les plannings de ses propres groupes",
+    permissions: [
+      PermissionCode.OrgManage,
+      PermissionCode.ShiftsManage
     ]
   },
   {

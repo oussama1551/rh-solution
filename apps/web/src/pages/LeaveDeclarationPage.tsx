@@ -47,6 +47,14 @@ export function LeaveDeclarationPage() {
 
   const selectedEmployee = employees.data.find(employee => employee.id === filters.employeeId) || null;
   const isAdmin = Boolean(user?.roles.includes("ADMIN"));
+  const duplicateLeaveIds = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    history.data.filter(row => row.status !== "REJECTED").forEach(row => {
+      const key = `${row.employee.id}:${row.dateStart.slice(0, 10)}:${row.dateEnd.slice(0, 10)}`;
+      groups.set(key, [...(groups.get(key) || []), row.id]);
+    });
+    return new Set([...groups.values()].filter(ids => ids.length > 1).flat());
+  }, [history.data]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -134,6 +142,7 @@ export function LeaveDeclarationPage() {
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-error">{error}</div>}
+        {duplicateLeaveIds.size > 0 && <div className="alert alert-error">Attention : {duplicateLeaveIds.size} déclaration(s) appartiennent à des doublons exacts pour le même employé et les mêmes dates. Toute nouvelle création identique est maintenant bloquée.</div>}
 
         <form className="quick-create declaration-card" onSubmit={submit}>
           <strong><CalendarPlus size={16} /> Déclaration congé</strong>
@@ -208,6 +217,7 @@ export function LeaveDeclarationPage() {
             { key: "start", header: "Début", render: row => formatDate(row.dateStart), sortValue: row => row.dateStart },
             { key: "end", header: "Fin", render: row => formatDate(row.dateEnd), sortValue: row => row.dateEnd },
             { key: "status", header: "Statut", render: row => <StatusBadge value={row.status} />, sortValue: row => row.status },
+            { key: "duplicate", header: "Contrôle", render: row => duplicateLeaveIds.has(row.id) ? <span className="badge badge-red">Doublon exact</span> : <span className="badge badge-green">Unique</span>, sortValue: row => duplicateLeaveIds.has(row.id) ? 1 : 0 },
             { key: "note", header: "Note", render: row => row.note || "-", sortValue: row => row.note || "" },
             { key: "by", header: "Déclaré par", render: row => row.declaredBy?.fullName || row.declaredBy?.username || "-", sortValue: row => row.declaredBy?.fullName || row.declaredBy?.username || "" },
             { key: "approved", header: "Validé par", render: row => row.approvedBy?.fullName || row.approvedBy?.username || "-", sortValue: row => row.approvedBy?.fullName || row.approvedBy?.username || "" },

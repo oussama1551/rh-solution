@@ -20,6 +20,7 @@ import { SapModule } from "./sap/sap.module";
 import { ShiftsModule } from "./shifts/shifts.module";
 import { SyncModule } from "./sync/sync.module";
 import { UsersModule } from "./users/users.module";
+import { JobDescriptionsModule } from "./job-descriptions/job-descriptions.module";
 
 @Module({
   imports: [
@@ -40,7 +41,8 @@ import { UsersModule } from "./users/users.module";
     SapModule,
     ShiftsModule,
     SyncModule,
-    UsersModule
+    UsersModule,
+    JobDescriptionsModule
   ],
   providers: [
     {

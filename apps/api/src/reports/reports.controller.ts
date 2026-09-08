@@ -112,18 +112,18 @@ export class ReportsController {
 
   @Get("summary/export/excel")
   @Permissions(PermissionCode.ReportsExport)
-  async summaryExcel(@Query() query: ReportsQueryDto, @CurrentUser() actor: RequestUser, @Res() response: Response) {
+  async summaryExcel(@Query() query: ReportsQueryDto, @Query("mode") mode: string | undefined, @CurrentUser() actor: RequestUser, @Res() response: Response) {
     const rows = await this.summary.report(query, actor);
-    const buffer = await this.exports.summaryExcel(rows);
-    this.sendFile(response, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "rapport-synthese.xlsx");
+    const buffer = mode === "detailed" ? await this.exports.summaryDetailedExcel(rows, await this.summary.dailyRecords(query, actor), query.startDate, query.endDate) : await this.exports.summaryExcel(rows);
+    this.sendFile(response, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mode === "detailed" ? "rapport-synthese-detaille.xlsx" : "rapport-synthese.xlsx");
   }
 
   @Get("summary/export/pdf")
   @Permissions(PermissionCode.ReportsExport)
-  async summaryPdf(@Query() query: ReportsQueryDto, @CurrentUser() actor: RequestUser, @Res() response: Response) {
+  async summaryPdf(@Query() query: ReportsQueryDto, @Query("mode") mode: string | undefined, @CurrentUser() actor: RequestUser, @Res() response: Response) {
     const rows = await this.summary.report(query, actor);
-    const buffer = await this.exports.summaryPdf(rows);
-    this.sendFile(response, buffer, "application/pdf", "rapport-synthese.pdf");
+    const buffer = mode === "detailed" ? await this.exports.summaryDetailedPdf(rows, await this.summary.dailyRecords(query, actor), query.startDate, query.endDate) : await this.exports.summaryPdf(rows);
+    this.sendFile(response, buffer, "application/pdf", mode === "detailed" ? "rapport-synthese-detaille.pdf" : "rapport-synthese.pdf");
   }
 
   private sendFile(response: Response, buffer: Buffer, contentType: string, filename: string) {

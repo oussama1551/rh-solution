@@ -14,7 +14,8 @@ import {
   Monitor,
   Settings,
   RefreshCw,
-  Users
+  Users,
+  BookOpenText
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -29,9 +30,10 @@ const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard;
   { label: "Temps réel", to: "/realtime", icon: Activity, permission: "attendance.read" },
   { label: "Absences", to: "/absences", icon: CalendarX, permission: "reports.read" },
   { label: "Absences non confirmées", to: "/presumed-absences", icon: CalendarX, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH"] },
+  { label: "Déclaration absences", to: "/manual-absences", icon: CalendarPlus, permission: "attendance.read", roles: ["ADMIN", "DRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
   { label: "Employés", to: "/employees", icon: Users, permission: "employees.read" },
   { label: "Démissionnés", to: "/employees/resigned", icon: Users, permission: "employees.read", roles: ["ADMIN", "DRH", "GRH"] },
-  { label: "Heures sup.", to: "/overtime", icon: Clock, permission: "attendance.read", roles: ["ADMIN", "DRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
+  { label: "Heures sup.", to: "/overtime", icon: Clock, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
   { label: "Maladie", to: "/sick-leaves", icon: CalendarPlus, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH"] },
   { label: "Congé", to: "/leaves", icon: CalendarDays, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
   { label: "Validation RH", to: "/validation", icon: ClipboardCheck, permission: "attendance.manage" },
@@ -44,6 +46,7 @@ const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard;
   { label: "Contrôle paie", to: "/admin/payroll-control", icon: ShieldCheck, permission: "payroll.control" },
   { label: "Synchronisation", to: "/admin/sync", icon: RefreshCw, permission: "sync.run" },
   { label: "Annuaire SAP", to: "/admin/sap-directory", icon: Users, permission: "employees.manage" },
+  { label: "Fiches de poste", to: "/job-descriptions", icon: BookOpenText, permission: "job_description.view" },
   { label: "Administration", to: "/admin/users", icon: Settings, permission: "administration.read" }
 ];
 

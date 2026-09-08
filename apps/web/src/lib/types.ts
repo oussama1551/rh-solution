@@ -21,7 +21,84 @@ export type Permission =
   | "reports.export"
   | "payroll.control"
   | "sync.run"
-  | "audit.read";
+  | "audit.read"
+  | "job_description.view"
+  | "job_description.create"
+  | "job_description.edit"
+  | "job_description.archive"
+  | "job_description.validate"
+  | "job_description.generate"
+  | "job_template.manage"
+  | "mission_library.manage"
+  | "company_branding.manage"
+  | "stamp.manage"
+  | "signature.manage";
+
+export type JobCompany = {
+  id: string;
+  code: string;
+  officialName: string;
+  shortName: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  legalInfo: string | null;
+  primaryColor: string | null;
+  footerText: string | null;
+  isActive: boolean;
+  brandings: Array<{ id: string; assetType: string; relativePath: string; originalName: string | null; sha256?: string }>;
+};
+
+export type JobTemplateVersion = {
+  id: string;
+  majorVersion: number;
+  minorVersion: number;
+  status: string;
+  content: Record<string, unknown>;
+  validatedAt: string | null;
+};
+
+export type JobPosition = {
+  id: string;
+  companyId: string | null;
+  code: string;
+  title: string;
+  direction: string | null;
+  department: string | null;
+  service: string | null;
+  hierarchicalReporting: string | null;
+  functionalReporting: string | null;
+  isActive: boolean;
+  company: JobCompany | null;
+  aliases: Array<{ id: string; sourceValue: string }>;
+  templates: JobDescriptionTemplate[];
+};
+
+export type JobDescriptionTemplate = {
+  id: string;
+  name: string;
+  visualTheme: string;
+  orientation: string;
+  isActive: boolean;
+  workflowId?: string | null;
+  currentVersion: JobTemplateVersion | null;
+};
+
+export type MissionLibraryItem = {
+  id: string;
+  companyId: string | null;
+  category: string;
+  code: string | null;
+  label: string;
+  description: string | null;
+  taskType: string | null;
+  frequency: string | null;
+  priority: number | null;
+  essential: boolean;
+  defaultKpi: Record<string, unknown> | null;
+  isActive: boolean;
+  company: JobCompany | null;
+};
 
 export type User = {
   id: string;
@@ -90,6 +167,9 @@ export type AdvancedTreatmentRow = {
   justifiedDays: number;
   sickDays: number;
   leaveDays: number;
+  sapAbsenceTypes: string[];
+  sapAbsenceDays: number;
+  sapAbsenceHours: number;
   analyzableDays: number;
   riskLevel: AdvancedTreatmentRiskLevel;
   riskLabel: string;
@@ -469,7 +549,7 @@ export type AttendanceTiming = "MORNING" | "EVENING" | "NIGHT" | "NORMAL";
 export type ShiftType = "MORNING" | "EVENING" | "NIGHT" | "FLEXIBLE" | "REPOS" | "SEC_MORNING" | "SEC_NIGHT";
 export type ApprovalStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 export type OvertimeRateType = "RATE_50" | "RATE_75" | "RATE_100";
-export type AttendanceSummaryStatus = "PRESENT" | "ABSENT" | "SICK" | "LEAVE" | "ACCIDENT" | "COMPENSATED" | "ABSENCE_REVERSED" | "REST" | "INCOMPLETE" | "EMPTY";
+export type AttendanceSummaryStatus = "PRESENT" | "ABSENT" | "SICK" | "LEAVE" | "ACCIDENT" | "COMPENSATED" | "ABSENCE_REVERSED" | "REST" | "INCOMPLETE" | "CONTRACT_NOT_STARTED" | "CONTRACT_ENDED" | "EMPTY";
 export type NotificationType =
   | "PENDING_APPROVAL"
   | "APPROVAL_RESULT"
@@ -672,6 +752,7 @@ export type PlanningApprovals = {
 };
 
 export type ManualDeclarationApprovals = {
+  manualAbsences: ManualAbsenceDeclaration[];
   overtime: Array<{
     id: string;
     date: string;
@@ -881,6 +962,8 @@ export type SummaryReportRow = {
   absenceReversedDays: number;
   restDays: number;
   incompleteDays: number;
+  contractNotStartedDays: number;
+  contractEndedDays: number;
   totalWorkedHours: number;
   totalOvertimeHours: number;
   overtimeHoursRate50: number;
@@ -891,6 +974,7 @@ export type SummaryReportRow = {
 
 export type SummaryDailyRecordRow = {
   id: string;
+  employeeId: string;
   workDate: string;
   status: AttendanceSummaryStatus;
   workedHours: number;
@@ -982,45 +1066,112 @@ export type AbsenceReversalRequest = {
 export type PayrollMapTarget = "ABSENCE" | "OVERTIME_50" | "OVERTIME_75" | "OVERTIME_100" | "SICK" | "COMPENSATION" | "IGNORED";
 
 export type PayrollRubricMapping = {
-  id: string;
+  id?: string;
   rubricCode: string;
   rubricLabel: string | null;
-  mapsTo: PayrollMapTarget;
+  mapsTo?: PayrollMapTarget;
   importCount: number;
 };
 
 export type PayrollControlRow = {
-  employee: {
-    id: string;
-    code: string;
-    fullName: string;
-    org: string;
-  };
-  rh: PayrollControlValues;
-  sap: PayrollControlValues;
-  diff: PayrollControlValues;
-  hasDiff: boolean;
+  employee: { id: string | null; code: string; fullName: string; department: string; org: string; linked: boolean; attendanceTrackingExempt: boolean; attendanceExemptReason?: string | null };
+  rubricValues: Record<string, { base: number; amount: number }>;
+  punchDays: number;
+  emptyDays: number;
+  sickDays: number;
+  leaveDays: number;
+  punchOnLeaveOrSickDays: number;
+  warnings: { manyEmptyDays: boolean; hasLeaveOrSick: boolean; punchOnLeaveOrSick: boolean };
+  confirmedBy?: UserSummary | null;
+  confirmedAt?: string | null;
+  note?: string | null;
 };
 
-export type PayrollControlValues = {
-  absence: number;
-  overtime50: number;
-  overtime75: number;
-  overtime100: number;
-  sick: number;
-  compensation: number;
+export type EmployeeContract = {
+  id: string; employeeId: string; startDate: string; endDate?: string | null; contractType?: string | null; reference?: string | null; note?: string | null; createdAt: string; updatedAt: string;
+};
+
+export type EmployeeContractRecord = {
+  id: string; fullName: string; localMatricule?: string | null; biotimeCode?: string | null; employeeCode: string; department?: string | null;
+  attendanceTrackingExempt: boolean; attendanceExemptReason?: string | null; attendanceExemptAt?: string | null; attendanceExemptBy?: UserSummary | null; contracts: EmployeeContract[];
+};
+
+export type ManualAbsenceDeclaration = {
+  id: string;
+  absenceDate: string;
+  reason: string;
+  status: ApprovalStatus;
+  createdAt: string;
+  approvedAt?: string | null;
+  employee: { id: string; fullName: string; department?: string | null; localMatricule?: string | null; biotimeCode?: string | null; employeeCode?: string | null };
+  declaredBy?: UserSummary | null;
+  approvedBy?: UserSummary | null;
+};
+
+export type OvertimeEmployeeTotal = {
+  employee: { id: string; fullName: string; localMatricule?: string | null; biotimeCode?: string | null; employeeCode?: string | null; department?: string | null };
+  declarationCount: number;
+  pendingCount: number;
+  rate50: number;
+  rate75: number;
+  rate100: number;
+  total: number;
 };
 
 export type PayrollControlResponse = {
   period: string;
   startDate: string;
   endDate: string;
-  tolerance: number;
+  rubricCodes: string[];
+  rubricHash: string;
   rows: PayrollControlRow[];
-  totals: {
-    employees: number;
-    withDiff: number;
-  };
+  totals: { employees: number };
+};
+
+export type PayrollOperationalRow = {
+  sourceKey: string;
+  company: string;
+  sapMatricule: string;
+  fullName: string;
+  localEmployeeId?: string | null;
+  department: string;
+  org: string;
+  orgKey: string;
+  hasOrganigram: boolean;
+  hasPlanning: boolean;
+  responsibleId?: string | null;
+  responsibleName?: string | null;
+  absenceTypes: string[];
+  absenceHours: number;
+  absenceDays: number;
+  overtimeDates: string[];
+  overtimeDetails: Array<{ date: string; hours50: number; hours75: number; hours100: number; total: number }>;
+  overtime50: number;
+  overtime75: number;
+  overtime100: number;
+  rhOvertime50: number;
+  rhOvertime75: number;
+  rhOvertime100: number;
+  rhOvertimeDetails: Array<{ date: string; hours50: number; hours75: number; hours100: number; total: number }>;
+  overtimeDifference50: number;
+  overtimeDifference75: number;
+  overtimeDifference100: number;
+  overtimeMatches: boolean;
+  rhConfirmedAbsenceDays: number;
+  rhManualAbsenceDays: number;
+  rhPrincipalAbsenceDays: number;
+  missingRhAbsenceInSap: boolean;
+  verdict?: "GOOD" | "NOT_GOOD" | null;
+  reviewedBy?: UserSummary | null;
+  reviewedAt?: string | null;
+  note?: string | null;
+};
+
+export type PayrollOperationalResponse = {
+  period: string;
+  category: "ABSENCE" | "OVERTIME";
+  rows: PayrollOperationalRow[];
+  totals: { employees: number; good: number; notGood: number; pending: number };
 };
 
 export type SyncState = {

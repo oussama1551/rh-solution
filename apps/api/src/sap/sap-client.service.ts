@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { SAP_EMPLOYEES_QUERY, sapPayrollLinesQuery } from "./sap-query";
-import { SapEmployee, SapPayrollLine } from "./sap.types";
+import { SAP_EMPLOYEES_QUERY, sapOperationalAbsencesQuery, sapOperationalOvertimeQuery, sapPayrollLinesQuery } from "./sap-query";
+import { SapEmployee, SapOperationalAbsence, SapOperationalOvertime, SapPayrollLine } from "./sap.types";
 
 @Injectable()
 export class SapHanaClientService {
@@ -14,6 +14,9 @@ export class SapHanaClientService {
   async listPayrollLines(period: string): Promise<SapPayrollLine[]> {
     return this.execute<SapPayrollLine>(sapPayrollLinesQuery(period));
   }
+
+  async listOperationalAbsences(period: string) { return this.execute<SapOperationalAbsence>(sapOperationalAbsencesQuery(period)); }
+  async listOperationalOvertime(period: string) { return this.execute<SapOperationalOvertime>(sapOperationalOvertimeQuery(period)); }
 
   private async execute<T>(query: string): Promise<T[]> {
     const hana = await import("@sap/hana-client");

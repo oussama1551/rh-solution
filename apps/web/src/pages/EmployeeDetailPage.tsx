@@ -1,4 +1,4 @@
-import { Clock3, UserX } from "lucide-react";
+import { Clock3, FileText, UserX } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BiometricBadges } from "../components/BiometricBadges";
@@ -156,6 +156,7 @@ export function EmployeeDetailPage() {
         backLabel="Retour aux employés"
         actions={employee.data && (
           <div className="row-actions">
+            {can("job_description.view") && <Link className="btn btn-secondary" to={`/job-descriptions/documents?employeeId=${employee.data.id}`}><FileText size={15} /> Fiches de poste</Link>}
             <button className="btn btn-secondary" type="button" onClick={() => setHistoryOpen(true)}><Clock3 size={15} /> Historique des pointages</button>
             {canManageResigns && employee.data.status === "ACTIVE" && <button className="btn btn-danger" type="button" onClick={() => setResignOpen(true)}><UserX size={15} /> Démissionner</button>}
             <PermissionGate permission="employees.manage"><Link className="btn btn-primary" to={`/employees/${employee.data.id}/edit`}>Modifier BioTime</Link></PermissionGate>
