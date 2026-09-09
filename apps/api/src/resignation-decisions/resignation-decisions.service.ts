@@ -77,6 +77,7 @@ export class ResignationDecisionsService {
   async preview(employeeId: string, actor: RequestUser) {
     this.generatorOnly(actor);
     const context = await this.context(employeeId);
+    const history = await this.prisma.resignationDecision.findMany({ where: { employeeId }, orderBy: { generatedAt: "desc" }, take: 6, select: decisionSelect });
     const decisionDate = new Date();
     const effectiveDate = context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate || decisionDate;
     const sap = context.employee.sapDirectoryRecords[0] || null;
@@ -105,6 +106,7 @@ export class ResignationDecisionsService {
       decision: {
         employeeName: sapNameAr || sap?.fullName || context.employee.fullName || "",
         employeePosition: sap?.poste || biotimePosition || "",
+        decisionDate: isoDate(decisionDate),
         contractDate: isoDate(contractDate),
         requestDate: isoDate(decisionDate),
         effectiveDate: isoDate(effectiveDate),
@@ -117,7 +119,8 @@ export class ResignationDecisionsService {
         effectiveDate: context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate ? "BioTime démission" : "Manuel",
         gerantName: context.unit.gerantName ? "Paramétrage société" : "Manuel"
       },
-      missingFields: this.missing(context)
+      missingFields: this.missing(context),
+      history
     };
   }
 

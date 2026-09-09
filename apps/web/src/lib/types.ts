@@ -1097,9 +1097,10 @@ export type ResignationDecisionDraft = {
   employee: { id:string; name:string; matricule:string|null; biotimeCode:string|null; department:string|null; hireDate:string|null };
   sap: { code:string; company:string; name:string; arabicName:string|null; poste:string|null; structure:string|null; phone:string|null } | null;
   unit: { id:string; name:string; legalName:string|null; gerantName:string|null; gerantTitle:string|null };
-  decision: { employeeName:string; employeePosition:string; contractDate:string; requestDate:string; effectiveDate:string; gerantName:string };
+  decision: { employeeName:string; employeePosition:string; decisionDate:string; contractDate:string; requestDate:string; effectiveDate:string; gerantName:string };
   sources: Record<string, string>;
   missingFields: string[];
+  history: ResignationDecision[];
 };
 
 export type PayrollSummaryOverride = {
