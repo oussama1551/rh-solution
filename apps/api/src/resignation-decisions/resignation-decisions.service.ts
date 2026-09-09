@@ -78,8 +78,9 @@ export class ResignationDecisionsService {
     const context = await this.context(employeeId);
     const decisionDate = new Date();
     const effectiveDate = context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate || decisionDate;
-    const contractDate = contractStart(context.employee.contracts, effectiveDate) || context.employee.hireDate || decisionDate;
     const sap = context.employee.sapDirectoryRecords[0] || null;
+    const sapNameAr = sapArabicName(sap?.rawPayload);
+    const contractDate = contractStart(context.employee.contracts, effectiveDate) || sap?.hireDate || context.employee.hireDate || decisionDate;
     const biotimePosition = position(context.employee.sourcePayload);
     return {
       employee: {
@@ -94,23 +95,24 @@ export class ResignationDecisionsService {
         code: `${sap.sapCompany}-${sap.sapEmpId}`,
         company: sap.sapCompany,
         name: sap.fullName,
+        arabicName: sapNameAr,
         poste: sap.poste,
         structure: sap.structure,
         phone: sap.mobile
       } : null,
       unit: { id: context.unit.id, name: context.unit.name, legalName: context.unit.fullLegalName, gerantName: context.unit.gerantName, gerantTitle: context.unit.gerantTitle },
       decision: {
-        employeeName: context.employee.fullName || sap?.fullName || "",
-        employeePosition: biotimePosition || sap?.poste || "",
+        employeeName: sapNameAr || sap?.fullName || context.employee.fullName || "",
+        employeePosition: sap?.poste || biotimePosition || "",
         contractDate: isoDate(contractDate),
         requestDate: isoDate(decisionDate),
         effectiveDate: isoDate(effectiveDate),
         gerantName: context.unit.gerantName || ""
       },
       sources: {
-        employeeName: "RH Solution / BioTime",
-        employeePosition: biotimePosition ? "BioTime" : sap?.poste ? "SAP" : "Manuel",
-        contractDate: context.employee.contracts.length ? "Contrats RH" : context.employee.hireDate ? "BioTime" : "Manuel",
+        employeeName: sapNameAr ? "SAP arabe" : sap?.fullName ? "SAP" : "RH Solution / BioTime",
+        employeePosition: sap?.poste ? "SAP" : biotimePosition ? "BioTime" : "Manuel",
+        contractDate: context.employee.contracts.length ? "Contrats RH" : sap?.hireDate ? "SAP" : context.employee.hireDate ? "BioTime" : "Manuel",
         effectiveDate: context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate ? "BioTime démission" : "Manuel",
         gerantName: context.unit.gerantName ? "Paramétrage société" : "Manuel"
       },
@@ -162,11 +164,11 @@ export class ResignationDecisionsService {
     return missing;
   }
   private async snapshot(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, number: string, sequence: number, decisionDate: Date, effectiveDate: Date, requestDate: Date, overrides?: DecisionOverrides) {
-    const contractDate = overrides?.contractDate ? parseDate(overrides.contractDate, "Date de contrat invalide.") : (contractStart(c.employee.contracts, effectiveDate) || c.employee.hireDate || requestDate);
+    const contractDate = overrides?.contractDate ? parseDate(overrides.contractDate, "Date de contrat invalide.") : (contractStart(c.employee.contracts, effectiveDate) || c.employee.sapDirectoryRecords[0]?.hireDate || c.employee.hireDate || requestDate);
     const sap = c.employee.sapDirectoryRecords[0] || null;
-    const employeePosition = cleanOverride(overrides?.employeePosition) || position(c.employee.sourcePayload) || sap?.poste || "___";
+    const employeePosition = cleanOverride(overrides?.employeePosition) || sap?.poste || position(c.employee.sourcePayload) || "___";
     const vars: Record<string,string> = {
-      employee_name: cleanOverride(overrides?.employeeName) || c.employee.fullName || sap?.fullName || "___",
+      employee_name: cleanOverride(overrides?.employeeName) || sapArabicName(sap?.rawPayload) || sap?.fullName || c.employee.fullName || "___",
       employee_position: employeePosition,
       decision_number: number,
       decision_number_ar: `${String(sequence).padStart(2, "0")} / م ع/ م م ب/${decisionDate.getUTCFullYear()}`,
@@ -192,7 +194,7 @@ export class ResignationDecisionsService {
     const fontPath = "C:\\Windows\\Fonts\\arial.ttf";
     const font = existsSync(fontPath) ? (await readFile(fontPath)).toString("base64") : "";
     const lines = renderDecisionLines(String(s.content || ""));
-    return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>@font-face{font-family:ArabicLocal;src:url(data:font/ttf;base64,${font})}*{box-sizing:border-box}@page{size:A4;margin:0}html,body{margin:0;padding:0;background:white}.page{font-family:ArabicLocal,Arial,sans-serif;direction:rtl;width:210mm;min-height:297mm;padding:18mm 20mm 14mm;color:#111;font-size:14.2px;line-height:1.72}.doc-head-line{text-align:center;font-weight:800;font-size:15.5px;line-height:1.7}.content{margin-top:14px}.decision-line{margin:4px 0;text-align:justify;page-break-inside:avoid}.decision-line.blank{height:8px;margin:0}.decision-line.recital{padding-right:16px;text-indent:-13px}.decision-line.center{text-align:center;font-weight:800;font-size:17px;margin:15px 0 12px}.decision-line.article{font-size:15px;margin:7px 0}.decision-line.article strong{font-weight:800}.copies{margin-top:20px;line-height:1.85}.signature{margin-top:10mm;margin-right:auto;width:58mm;text-align:center;line-height:1.9;font-size:15px}.signature + .signature{margin-top:0}.signature strong{font-weight:800}</style></head><body><main class="page">${lines}</main></body></html>`;
+    return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>@font-face{font-family:ArabicLocal;src:url(data:font/ttf;base64,${font})}*{box-sizing:border-box}@page{size:A4;margin:0}html,body{margin:0;padding:0;background:white}.page{font-family:ArabicLocal,Arial,sans-serif;direction:rtl;width:210mm;min-height:297mm;padding:14mm 20mm 14mm;color:#111;font-size:14.2px;line-height:1.72}.letter-logo{display:block;max-width:170mm;max-height:30mm;margin:0 auto 8mm;object-fit:contain}.doc-head-line{text-align:center;font-weight:800;font-size:15.5px;line-height:1.7}.content{margin-top:14px}.decision-line{margin:4px 0;text-align:justify;page-break-inside:avoid}.decision-line.blank{height:8px;margin:0}.decision-line.recital{padding-right:16px;text-indent:-13px}.decision-line.center{text-align:center;font-weight:800;font-size:17px;margin:15px 0 12px}.decision-line.article{font-size:15px;margin:7px 0}.decision-line.article strong{font-weight:800}.copies{margin-top:20px;line-height:1.85}.signature{margin-top:10mm;margin-right:auto;width:58mm;text-align:center;line-height:1.9;font-size:15px}.signature + .signature{margin-top:0}.signature strong{font-weight:800}</style></head><body><main class="page">${s.logo ? `<img class="letter-logo" src="${s.logo}">` : ""}${lines}</main></body></html>`;
   }
   private async renderPdf(html: string) { const executablePath = chromePath(); const browser = await puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }); try { const page = await browser.newPage(); await page.setContent(html, { waitUntil: "load" }); return Buffer.from(await page.pdf({ format: "A4", printBackground: true })); } finally { await browser.close(); } }
   private adminOnly(actor: RequestUser) { if (!actor.roles.includes("ADMIN")) throw new ForbiddenException("Paramétrage réservé à Admin."); }
@@ -205,6 +207,21 @@ export function substituteVariables(template: string, vars: Record<string,string
 export function normalizeResignationTemplateForPdf(value: string) { return normalizeTemplateText(value); }
 function templateVariables(template: string) { return new Set(Array.from(template.matchAll(/{{\s*([a-z_]+)\s*}}/gi), match => match[1])); }
 function cleanOverride(value?: string) { return typeof value === "string" && value.trim() ? value.trim() : null; }
+function sapArabicName(payload: unknown) {
+  const row = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
+  const direct = rawArabicString(row, ["arabicName", "arabic_name", "fullNameArabic", "full_name_ar", "nameArabic", "name_ar", "NomAr", "PrenomAr", "U_CMC_NOMAR", "U_CMC_PRENOMAR", "U_CMC_NomAr", "U_CMC_PrenomAr"]);
+  if (direct) return direct;
+  const parts = [rawArabicString(row, ["lastNameArabic", "last_name_ar", "Nom_Ar", "nom_ar"]), rawArabicString(row, ["firstNameArabic", "first_name_ar", "Prenom_Ar", "prenom_ar"])].filter(Boolean);
+  if (parts.length) return parts.join(" ");
+  return Object.values(row).find(value => typeof value === "string" && /[\u0600-\u06FF]/.test(value) && value.trim().split(/\s+/).length >= 2)?.toString().trim() || null;
+}
+function rawArabicString(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && /[\u0600-\u06FF]/.test(value) && value.trim()) return value.trim();
+  }
+  return null;
+}
 function position(payload: unknown) { const p = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}; for (const key of ["position_name", "position", "job_title", "title", "designation"]) if (typeof p[key] === "string" && p[key]) return String(p[key]); return null; }
 function parseDate(value: string, message: string) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new BadRequestException(message); const d = new Date(`${value}T00:00:00.000Z`); if (Number.isNaN(d.getTime())) throw new BadRequestException(message); return d; }
 function isoDate(d: Date) { return d.toISOString().slice(0,10); } function formatDate(d: Date) { return new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC" }).format(d); }

@@ -129,7 +129,7 @@ function DecisionDraftModal({ draft, busy, regenerate, onClose, onSubmit }: { dr
     <div className="modal-header"><div><span>Préparation du document</span><strong>{regenerate ? "Régénérer la décision" : "Décision de démission"}</strong></div><button type="button" className="icon-button" onClick={onClose}><X size={18}/></button></div>
     <div className="decision-source-grid">
       <SourceCard title="RH / BioTime" rows={[["Nom", draft.employee.name],["Matricule", draft.employee.matricule],["BioTime", draft.employee.biotimeCode],["Département", draft.employee.department],["Embauche", displayDate(draft.employee.hireDate)]]}/>
-      <SourceCard title="SAP" rows={draft.sap ? [["Nom SAP", draft.sap.name],["Code SAP", draft.sap.code],["Poste", draft.sap.poste],["Structure", draft.sap.structure],["Téléphone", draft.sap.phone]] : [["Statut", "Aucun lien SAP trouvé"]]}/>
+      <SourceCard title="SAP" rows={draft.sap ? [["Nom arabe", draft.sap.arabicName],["Nom SAP", draft.sap.name],["Code SAP", draft.sap.code],["Poste", draft.sap.poste],["Structure", draft.sap.structure],["Téléphone", draft.sap.phone]] : [["Statut", "Aucun lien SAP trouvé"]]}/>
       <SourceCard title="Société" rows={[["Unité", draft.unit.name],["Nom légal", draft.unit.legalName],["Signataire", draft.unit.gerantName],["Titre", draft.unit.gerantTitle]]}/>
     </div>
     {!!draft.missingFields.length&&<div className="alert alert-warning">Champs à vérifier : {draft.missingFields.join(", ")}</div>}
