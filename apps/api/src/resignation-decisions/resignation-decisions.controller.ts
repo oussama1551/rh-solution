@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -19,9 +19,9 @@ export class ResignationDecisionsController {
   uploadLogo(@Param("id") id: string, @UploadedFile() file: { buffer: Buffer; mimetype: string; originalname: string }, @CurrentUser() actor: RequestUser) { return this.service.uploadLogo(id, file, actor); }
   @Get("units/:id/logo") async logo(@Param("id") id: string, @Res() res: Response) { const asset = await this.service.getLogo(id); res.type(asset.mime).send(asset.buffer); }
 
-  @Get("employee/:id") employeeState(@Param("id") id: string, @CurrentUser() actor: RequestUser) { return this.service.employeeState(id, actor); }
-  @Get("employee/:id/preview") preview(@Param("id") id: string, @CurrentUser() actor: RequestUser) { return this.service.preview(id, actor); }
-  @Post("employee/:id/generate") generate(@Param("id") id: string, @Body() body: { decisionDate?: string; effectiveDate?: string; requestDate?: string; regenerate?: boolean; overrides?: Record<string, string | undefined> }, @CurrentUser() actor: RequestUser) { return this.service.generate(id, body, actor); }
-  @Get(":id/download-data") async downloadData(@Param("id") id: string, @CurrentUser() actor: RequestUser) { const asset = await this.service.pdf(id, actor); return { fileName: `decision-demission-${asset.number.replace(/\//g, "-")}.pdf`, contentBase64: asset.buffer.toString("base64") }; }
-  @Get(":id/pdf") async pdf(@Param("id") id: string, @CurrentUser() actor: RequestUser, @Res() res: Response) { const asset = await this.service.pdf(id, actor); res.setHeader("Content-Type", "application/pdf"); res.setHeader("Content-Disposition", `attachment; filename=decision-demission-${asset.number.replace(/\//g, "-")}.pdf`); res.send(asset.buffer); }
+  @Get("employee/:id") employeeState(@Param("id") id: string, @Query("type") type: string | undefined, @CurrentUser() actor: RequestUser) { return this.service.employeeState(id, actor, type); }
+  @Get("employee/:id/preview") preview(@Param("id") id: string, @Query("type") type: string | undefined, @CurrentUser() actor: RequestUser) { return this.service.preview(id, actor, type); }
+  @Post("employee/:id/generate") generate(@Param("id") id: string, @Body() body: { decisionType?: string; decisionDate?: string; effectiveDate?: string; requestDate?: string; regenerate?: boolean; overrides?: Record<string, string | undefined> }, @CurrentUser() actor: RequestUser) { return this.service.generate(id, body, actor); }
+  @Get(":id/download-data") async downloadData(@Param("id") id: string, @CurrentUser() actor: RequestUser) { const asset = await this.service.pdf(id, actor); return { fileName: `decision-${asset.number.replace(/\//g, "-")}.pdf`, contentBase64: asset.buffer.toString("base64") }; }
+  @Get(":id/pdf") async pdf(@Param("id") id: string, @CurrentUser() actor: RequestUser, @Res() res: Response) { const asset = await this.service.pdf(id, actor); res.setHeader("Content-Type", "application/pdf"); res.setHeader("Content-Disposition", `attachment; filename=decision-${asset.number.replace(/\//g, "-")}.pdf`); res.send(asset.buffer); }
 }

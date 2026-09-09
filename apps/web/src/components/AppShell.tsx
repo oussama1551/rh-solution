@@ -51,7 +51,7 @@ const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard;
   { label: "Fiches de poste", to: "/job-descriptions", icon: BookOpenText, permission: "job_description.view" },
   { label: "Administration", to: "/admin/users", icon: Settings, permission: "administration.read" }
   ,{ label: "Tous les logs", to: "/admin/logs", icon: ScrollText, permission: "audit.read", roles: ["ADMIN"] }
-  ,{ label: "Décisions démission", to: "/admin/resignation-decisions", icon: ScrollText, permission: "administration.read", roles: ["ADMIN"] }
+  ,{ label: "Décisions RH", to: "/admin/resignation-decisions", icon: ScrollText, permission: "administration.read", roles: ["ADMIN"] }
 ];
 
 export function AppShell() {

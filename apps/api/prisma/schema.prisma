@@ -964,6 +964,7 @@ model Unit {
   gerantName                  String? @map("gerant_name") @db.VarChar(180)
   gerantTitle                 String? @map("gerant_title") @db.VarChar(180)
   resignationDecisionTemplate String? @map("resignation_decision_template")
+  positionChangeDecisionTemplate String? @map("position_change_decision_template")
 
   subUnits             SubUnit[]
   resignationDecisions ResignationDecision[]
@@ -992,6 +993,7 @@ model ResignationDecision {
   unitId           String   @map("unit_id") @db.Uuid
   sequenceYear     Int      @map("sequence_year")
   sequenceNumber   Int      @map("sequence_number")
+  decisionType     String   @default("RESIGNATION") @map("decision_type") @db.VarChar(40)
   decisionNumber   String   @map("decision_number") @db.VarChar(80)
   decisionDate     DateTime @map("decision_date") @db.Date
   effectiveDate    DateTime @map("effective_date") @db.Date
@@ -1006,6 +1008,7 @@ model ResignationDecision {
 
   @@unique([unitId, sequenceYear, sequenceNumber])
   @@index([employeeId, generatedAt])
+  @@index([employeeId, decisionType])
   @@map("resignation_decisions")
 }
 

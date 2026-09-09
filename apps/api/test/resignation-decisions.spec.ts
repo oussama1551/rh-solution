@@ -20,6 +20,12 @@ describe("resignation decisions", () => {
     expect(sql).toContain('"pdf_file_path" TEXT NOT NULL');
   });
 
+  it("ajoute un type de décision sans modifier les décisions existantes", () => {
+    const sql = readFileSync(join(__dirname, "../prisma/migrations/20260909143000_hr_decision_types/migration.sql"), "utf8");
+    expect(sql).toContain('"decision_type" VARCHAR(40) NOT NULL DEFAULT \'RESIGNATION\'');
+    expect(sql).toContain('"position_change_decision_template" TEXT');
+  });
+
   it("nettoie les marqueurs Markdown collés dans le modèle arabe", () => {
     expect(normalizeResignationTemplateForPdf("***المادة 01****: نص&#xA0;تجريبي"))
       .toBe("المادة 01: نص تجريبي");

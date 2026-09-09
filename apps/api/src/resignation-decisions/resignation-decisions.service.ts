@@ -10,8 +10,10 @@ import { RequestUser } from "../common/request-user.type";
 import { PrismaService } from "../prisma/prisma.service";
 
 const STORAGE = resolve(process.cwd(), "storage", "resignation-decisions");
-const PROFILE_FIELDS = ["fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle", "resignationDecisionTemplate"] as const;
-export const AVAILABLE_VARIABLES = ["employee_name", "employee_position", "decision_number", "decision_number_ar", "decision_sequence", "decision_year", "decision_date", "contract_date", "request_date", "effective_date", "effective_date_ar", "company_legal_name", "gerant_name"];
+const PROFILE_FIELDS = ["fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle", "resignationDecisionTemplate", "positionChangeDecisionTemplate"] as const;
+const DECISION_TYPES = ["RESIGNATION", "POSITION_CHANGE"] as const;
+type DecisionType = typeof DECISION_TYPES[number];
+export const AVAILABLE_VARIABLES = ["employee_name", "employee_position", "employee_number", "new_position", "grade", "category", "decision_title", "decision_number", "decision_number_ar", "decision_sequence", "decision_year", "decision_date", "hire_date", "contract_date", "request_date", "effective_date", "effective_date_ar", "company_legal_name", "gerant_name"];
 export const DEFAULT_RESIGNATION_DECISION_TEMPLATE = `المديريــــــــــــــة العامـــــــــــــــة
 مديريـــــــــة الموارد البشريـــــــــة
 رقم {{decision_sequence}} / م ع/ م م ب/{{decision_year}}
@@ -38,9 +40,29 @@ export const DEFAULT_RESIGNATION_DECISION_TEMPLATE = `المديريــــــ
 
 مسير الشركة
 {{gerant_name}}`;
+export const DEFAULT_POSITION_CHANGE_DECISION_TEMPLATE = `المديريــــــــــــــة العامـــــــــــــــة
+مديريـــــــــة الموارد البشريـــــــــة
+رقم {{decision_sequence}} / م ع/ م م ب/{{decision_year}}
+قـــــــرار
 
-type DecisionGenerateBody = { decisionDate?: string; effectiveDate?: string; requestDate?: string; regenerate?: boolean; overrides?: DecisionOverrides };
-type DecisionOverrides = { employeeName?: string; employeePosition?: string; contractDate?: string; requestDate?: string; effectiveDate?: string; gerantName?: string };
+- بمقتضى عقد تأسيس الشركة رقم 40/2011 الصادر في 10/01/2011 المتضمن انشاء شركة ذات المسؤولية المحدودة "فابكوم"
+- بمقتضى عقد تعديل القانون الأساسي للشركة رقم 970/2017 الصادر في 21 و 25/12/2017 المتضمن تعيين السيد: عطية عصام مسير لشركة فابكوم ش.ذ.م.م
+- بمقتضى القانون 90-11 في 23/04/1990 والمتعلق بعلاقات العمل سيما المادة 12.
+- بناء على النظام الداخلي للمؤسسة المؤرخ في 20 مارس 2022.
+- بناء على طلب تغيير المنصب للسيد: {{employee_name}}.
+
+يقـــــــــــــــــــــــــــــــــرر
+
+المادة 01: السيد/السيدة: {{employee_name}}، المنصب: {{employee_position}}، الرقم الوظيفي {{employee_number}}
+تاريخ التوظيف: {{hire_date}}، يتغير الى منصب {{new_position}}، الدرجة {{grade}} الصنف {{category}}.
+المادة 02: يسرى مفعول هذا القرار ابتداء من تاريخ {{effective_date}}.
+المادة 03: يكلف مدير الموارد البشرية ومسؤول الإنتاج ومسؤول المالية والمحاسبة بتنفيذ هذا القرار.
+
+مسير الشركة
+{{gerant_name}}`;
+
+type DecisionGenerateBody = { decisionType?: string; decisionDate?: string; effectiveDate?: string; requestDate?: string; regenerate?: boolean; overrides?: DecisionOverrides };
+type DecisionOverrides = { employeeName?: string; employeePosition?: string; employeeNumber?: string; newPosition?: string; grade?: string; category?: string; hireDate?: string; contractDate?: string; requestDate?: string; effectiveDate?: string; gerantName?: string };
 type EmployeeCompanyFallback = { localMatricule: string | null; employeeCode: string; biotimeCode: string | null; sapDirectoryRecords: Array<{ sapCompany: string }> };
 
 @Injectable()
@@ -68,22 +90,25 @@ export class ResignationDecisionsService {
 
   async getLogo(id: string) { const row = await this.prisma.unit.findUnique({ where: { id }, select: { legalLogoPath: true } }); if (!row?.legalLogoPath || !existsSync(row.legalLogoPath)) throw new NotFoundException("Logo introuvable."); return { buffer: await readFile(row.legalLogoPath), mime: extname(row.legalLogoPath).toLowerCase() === ".png" ? "image/png" : "image/jpeg" }; }
 
-  async employeeState(employeeId: string, actor: RequestUser) {
-    this.generatorOnly(actor); const context = await this.context(employeeId);
-    const latest = await this.prisma.resignationDecision.findFirst({ where: { employeeId }, orderBy: { generatedAt: "desc" }, select: decisionSelect });
-    return { employee: { id: context.employee.id, name: context.employee.fullName }, unit: { id: context.unit.id, name: context.unit.name }, latest, missingFields: this.missing(context) };
+  async employeeState(employeeId: string, actor: RequestUser, requestedType?: string) {
+    this.generatorOnly(actor); const decisionType = normalizeDecisionType(requestedType); const context = await this.context(employeeId, decisionType);
+    const latest = await this.prisma.resignationDecision.findFirst({ where: { employeeId, decisionType }, orderBy: { generatedAt: "desc" }, select: decisionSelect });
+    return { employee: { id: context.employee.id, name: context.employee.fullName }, unit: { id: context.unit.id, name: context.unit.name }, latest, missingFields: this.missing(context, decisionType) };
   }
 
-  async preview(employeeId: string, actor: RequestUser) {
+  async preview(employeeId: string, actor: RequestUser, requestedType?: string) {
     this.generatorOnly(actor);
-    const context = await this.context(employeeId);
-    const history = await this.prisma.resignationDecision.findMany({ where: { employeeId }, orderBy: { generatedAt: "desc" }, take: 6, select: decisionSelect });
+    const decisionType = normalizeDecisionType(requestedType);
+    const context = await this.context(employeeId, decisionType);
+    const history = await this.prisma.resignationDecision.findMany({ where: { employeeId, decisionType }, orderBy: { generatedAt: "desc" }, take: 6, select: decisionSelect });
     const decisionDate = new Date();
     const effectiveDate = context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate || decisionDate;
     const sap = context.employee.sapDirectoryRecords[0] || null;
     const sapNameAr = sapArabicName(sap?.rawPayload);
     const contractDate = contractStart(context.employee.contracts, effectiveDate) || sap?.hireDate || context.employee.hireDate || decisionDate;
+    const hireDate = sap?.hireDate || context.employee.hireDate || contractDate;
     const biotimePosition = position(context.employee.sourcePayload);
+    const employeeNumber = displayEmployeeNumber(context.employee, sap);
     return {
       employee: {
         id: context.employee.id,
@@ -104,8 +129,14 @@ export class ResignationDecisionsService {
       } : null,
       unit: { id: context.unit.id, name: context.unit.name, legalName: context.unit.fullLegalName, gerantName: context.unit.gerantName, gerantTitle: context.unit.gerantTitle },
       decision: {
+        decisionType,
         employeeName: sapNameAr || sap?.fullName || context.employee.fullName || "",
         employeePosition: sap?.poste || biotimePosition || "",
+        employeeNumber,
+        hireDate: isoDate(hireDate),
+        newPosition: "",
+        grade: "",
+        category: "",
         decisionDate: isoDate(decisionDate),
         contractDate: isoDate(contractDate),
         requestDate: isoDate(decisionDate),
@@ -115,20 +146,26 @@ export class ResignationDecisionsService {
       sources: {
         employeeName: sapNameAr ? "SAP arabe" : sap?.fullName ? "SAP" : "RH Solution / BioTime",
         employeePosition: sap?.poste ? "SAP" : biotimePosition ? "BioTime" : "Manuel",
+        employeeNumber: employeeNumber === `${sap?.sapEmpId}/${sap?.sapCompany}` ? "SAP" : "RH Solution / BioTime",
+        hireDate: sap?.hireDate ? "SAP" : context.employee.hireDate ? "BioTime" : context.employee.contracts.length ? "Contrats RH" : "Manuel",
+        newPosition: "Manuel",
+        grade: "Manuel",
+        category: "Manuel",
         contractDate: context.employee.contracts.length ? "Contrats RH" : sap?.hireDate ? "SAP" : context.employee.hireDate ? "BioTime" : "Manuel",
         effectiveDate: context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate ? "BioTime démission" : "Manuel",
         gerantName: context.unit.gerantName ? "Paramétrage société" : "Manuel"
       },
-      missingFields: this.missing(context),
+      missingFields: this.missing(context, decisionType),
       history
     };
   }
 
   async generate(employeeId: string, body: DecisionGenerateBody, actor: RequestUser) {
     this.generatorOnly(actor);
-    const previous = await this.prisma.resignationDecision.findFirst({ where: { employeeId }, orderBy: { generatedAt: "desc" }, select: decisionSelect });
+    const decisionType = normalizeDecisionType(body.decisionType);
+    const previous = await this.prisma.resignationDecision.findFirst({ where: { employeeId, decisionType }, orderBy: { generatedAt: "desc" }, select: decisionSelect });
     if (previous && !body.regenerate) return previous;
-    const context = await this.context(employeeId); const decisionDate = parseDate(body.decisionDate || isoDate(new Date()), "Date de décision invalide.");
+    const context = await this.context(employeeId, decisionType); const decisionDate = parseDate(body.decisionDate || isoDate(new Date()), "Date de décision invalide.");
     const effectiveDate = parseDate(body.overrides?.effectiveDate || body.effectiveDate || (context.employee.resignedAt ? isoDate(context.employee.resignedAt) : isoDate(new Date())), "Date d'effet invalide.");
     const requestDate = parseDate(body.overrides?.requestDate || body.requestDate || body.decisionDate || isoDate(new Date()), "Date de demande invalide.");
     const year = decisionDate.getUTCFullYear(); await mkdir(join(STORAGE, "pdf", String(year)), { recursive: true });
@@ -136,17 +173,17 @@ export class ResignationDecisionsService {
     const saved = await this.prisma.$transaction(async tx => {
       const sequence = await tx.$queryRaw<Array<{ last_number: number }>>`INSERT INTO "resignation_decision_sequences" ("id", "unit_id", "year", "last_number", "updated_at") VALUES (${randomUUID()}::uuid, ${context.unit.id}::uuid, ${year}, 1, NOW()) ON CONFLICT ("unit_id", "year") DO UPDATE SET "last_number" = "resignation_decision_sequences"."last_number" + 1, "updated_at" = NOW() RETURNING "last_number"`;
       const number = `${String(sequence[0].last_number).padStart(2, "0")}/DG/RH/${year}`;
-      const snapshot = await this.snapshot(context, number, sequence[0].last_number, decisionDate, effectiveDate, requestDate, body.overrides); const html = await this.html(snapshot); const buffer = await this.renderPdf(html);
+      const snapshot = await this.snapshot(context, decisionType, number, sequence[0].last_number, decisionDate, effectiveDate, requestDate, body.overrides); const html = await this.html(snapshot); const buffer = await this.renderPdf(html);
       const id = randomUUID(); const path = join(STORAGE, "pdf", String(year), `${id}.pdf`); await writeFile(path, buffer);
-      return tx.resignationDecision.create({ data: { id, employeeId, unitId: context.unit.id, sequenceYear: year, sequenceNumber: sequence[0].last_number, decisionNumber: number, decisionDate, effectiveDate, generatedById: actor.id, pdfFilePath: path, documentSnapshot: snapshot as unknown as Prisma.InputJsonValue }, select: decisionSelect });
+      return tx.resignationDecision.create({ data: { id, employeeId, unitId: context.unit.id, sequenceYear: year, sequenceNumber: sequence[0].last_number, decisionType, decisionNumber: number, decisionDate, effectiveDate, generatedById: actor.id, pdfFilePath: path, documentSnapshot: snapshot as unknown as Prisma.InputJsonValue }, select: decisionSelect });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 45_000 });
-    await this.audit.record({ userId: actor.id, action: "resignation_decision.generate", entityType: "resignation_decision", entityId: saved.id, metadata: { decisionNumber: saved.decisionNumber, employeeId, regeneration: Boolean(body.regenerate) } });
+    await this.audit.record({ userId: actor.id, action: "resignation_decision.generate", entityType: "resignation_decision", entityId: saved.id, metadata: { decisionNumber: saved.decisionNumber, decisionType, employeeId, regeneration: Boolean(body.regenerate) } });
     return saved;
   }
 
   async pdf(id: string, actor: RequestUser) { this.generatorOnly(actor); const row = await this.prisma.resignationDecision.findUnique({ where: { id } }); if (!row || !existsSync(row.pdfFilePath)) throw new NotFoundException("PDF historique introuvable."); return { buffer: await readFile(row.pdfFilePath), number: row.decisionNumber }; }
 
-  private async context(employeeId: string) {
+  private async context(employeeId: string, decisionType: DecisionType) {
     const employee = await this.prisma.employee.findUnique({
       where: { id: employeeId },
       include: {
@@ -156,7 +193,8 @@ export class ResignationDecisionsService {
         group: { include: { subUnit: { include: { unit: true } } } }
       }
     });
-    if (!employee || employee.status !== "RESIGNED") throw new BadRequestException("L'employé doit être démissionné.");
+    if (!employee) throw new NotFoundException("Employé introuvable.");
+    if (decisionType === "RESIGNATION" && employee.status !== "RESIGNED") throw new BadRequestException("L'employé doit être démissionné.");
     const unit = employee.group?.subUnit.unit || await this.fallbackUnit(employee);
     if (!unit) throw new BadRequestException("Société introuvable dans l'organigramme de l'employé et aucun lien SAP exploitable.");
     return { employee, unit };
@@ -166,26 +204,35 @@ export class ResignationDecisionsService {
     if (!company) return null;
     return this.prisma.unit.findFirst({ where: { OR: [{ code: { equals: company, mode: "insensitive" } }, { name: { equals: company, mode: "insensitive" } }] } });
   }
-  private missing(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>) {
-    const used = templateVariables(decisionTemplate(c.unit.resignationDecisionTemplate));
+  private missing(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, decisionType: DecisionType) {
+    const used = templateVariables(decisionTemplate(c.unit, decisionType));
     const missing: string[] = [];
+    const sap = c.employee.sapDirectoryRecords[0] || null;
     if (used.has("company_legal_name") && !c.unit.fullLegalName) missing.push("company_legal_name");
     if (used.has("gerant_name") && !c.unit.gerantName) missing.push("gerant_name");
-    if (used.has("employee_position") && !position(c.employee.sourcePayload)) missing.push("employee_position");
+    if (used.has("employee_position") && !sap?.poste && !position(c.employee.sourcePayload)) missing.push("employee_position");
+    if (decisionType === "POSITION_CHANGE") for (const key of ["new_position", "grade", "category"]) if (used.has(key)) missing.push(key);
     return missing;
   }
-  private async snapshot(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, number: string, sequence: number, decisionDate: Date, effectiveDate: Date, requestDate: Date, overrides?: DecisionOverrides) {
+  private async snapshot(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, decisionType: DecisionType, number: string, sequence: number, decisionDate: Date, effectiveDate: Date, requestDate: Date, overrides?: DecisionOverrides) {
     const contractDate = overrides?.contractDate ? parseDate(overrides.contractDate, "Date de contrat invalide.") : (contractStart(c.employee.contracts, effectiveDate) || c.employee.sapDirectoryRecords[0]?.hireDate || c.employee.hireDate || requestDate);
+    const hireDate = overrides?.hireDate ? parseDate(overrides.hireDate, "Date de recrutement invalide.") : (c.employee.sapDirectoryRecords[0]?.hireDate || c.employee.hireDate || contractDate);
     const sap = c.employee.sapDirectoryRecords[0] || null;
     const employeePosition = cleanOverride(overrides?.employeePosition) || sap?.poste || position(c.employee.sourcePayload) || "___";
     const vars: Record<string,string> = {
       employee_name: cleanOverride(overrides?.employeeName) || sapArabicName(sap?.rawPayload) || sap?.fullName || c.employee.fullName || "___",
       employee_position: employeePosition,
+      employee_number: cleanOverride(overrides?.employeeNumber) || displayEmployeeNumber(c.employee, sap),
+      new_position: cleanOverride(overrides?.newPosition) || "___",
+      grade: cleanOverride(overrides?.grade) || "___",
+      category: cleanOverride(overrides?.category) || "___",
+      decision_title: decisionType === "POSITION_CHANGE" ? "قرار تغيير المنصب" : "قرار الاستقالة",
       decision_number: number,
       decision_number_ar: `${String(sequence).padStart(2, "0")} / م ع/ م م ب/${decisionDate.getUTCFullYear()}`,
       decision_sequence: String(sequence).padStart(2, "0"),
       decision_year: String(decisionDate.getUTCFullYear()),
       decision_date: formatDate(decisionDate),
+      hire_date: formatDate(hireDate),
       contract_date: formatDate(contractDate),
       request_date: formatDate(requestDate),
       effective_date: formatDate(effectiveDate),
@@ -193,8 +240,9 @@ export class ResignationDecisionsService {
       company_legal_name: c.unit.fullLegalName || c.unit.name || "___",
       gerant_name: cleanOverride(overrides?.gerantName) || c.unit.gerantName || "___"
     };
-    const template = normalizeTemplateText(decisionTemplate(c.unit.resignationDecisionTemplate));
+    const template = normalizeTemplateText(decisionTemplate(c.unit, decisionType));
     return {
+      decisionType,
       vars,
       content: substituteVariables(template, vars),
       unit: Object.fromEntries(["name", "fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle"].map(k => [k, (c.unit as any)[k] || "___"])),
@@ -212,20 +260,32 @@ export class ResignationDecisionsService {
   private generatorOnly(actor: RequestUser) { if (!actor.roles.some(r => r === "ADMIN" || r === "DRH")) throw new ForbiddenException("Génération réservée à Admin et DRH."); }
 }
 
-const unitSelect = { id: true, name: true, code: true, legalLogoPath: true, fullLegalName: true, legalForm: true, legalAddress: true, capitalSocial: true, rcNumber: true, nifNumber: true, artNumber: true, legalPhones: true, legalEmail: true, legalWebsite: true, gerantName: true, gerantTitle: true, resignationDecisionTemplate: true } as const;
-const decisionSelect = { id: true, decisionNumber: true, decisionDate: true, effectiveDate: true, generatedAt: true, generatedBy: { select: { fullName: true, username: true } } } as const;
+const unitSelect = { id: true, name: true, code: true, legalLogoPath: true, fullLegalName: true, legalForm: true, legalAddress: true, capitalSocial: true, rcNumber: true, nifNumber: true, artNumber: true, legalPhones: true, legalEmail: true, legalWebsite: true, gerantName: true, gerantTitle: true, resignationDecisionTemplate: true, positionChangeDecisionTemplate: true } as const;
+const decisionSelect = { id: true, decisionType: true, decisionNumber: true, decisionDate: true, effectiveDate: true, generatedAt: true, generatedBy: { select: { fullName: true, username: true } } } as const;
 export function substituteVariables(template: string, vars: Record<string,string>) { return template.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => vars[key] || "___"); }
 export function normalizeResignationTemplateForPdf(value: string) { return normalizeTemplateText(value); }
-export function selectResignationDecisionTemplate(value?: string | null) { return decisionTemplate(value); }
+export function selectResignationDecisionTemplate(value?: string | null) { return decisionTemplate({ resignationDecisionTemplate: value, positionChangeDecisionTemplate: null }, "RESIGNATION"); }
 function templateVariables(template: string) { return new Set(Array.from(template.matchAll(/{{\s*([a-z_]+)\s*}}/gi), match => match[1])); }
-function decisionTemplate(saved?: string | null) {
+function decisionTemplate(unit: { resignationDecisionTemplate?: string | null; positionChangeDecisionTemplate?: string | null }, decisionType: DecisionType) {
+  const saved = decisionType === "POSITION_CHANGE" ? unit.positionChangeDecisionTemplate : unit.resignationDecisionTemplate;
+  const fallback = decisionType === "POSITION_CHANGE" ? DEFAULT_POSITION_CHANGE_DECISION_TEMPLATE : DEFAULT_RESIGNATION_DECISION_TEMPLATE;
   const normalized = normalizeTemplateText(saved || "");
   const variables = templateVariables(normalized);
   const hasWorkerVariables = variables.has("employee_name") && variables.has("employee_position");
-  const hasDateVariables = variables.has("contract_date") && variables.has("request_date") && (variables.has("effective_date") || variables.has("effective_date_ar"));
-  return hasWorkerVariables && hasDateVariables ? normalized : DEFAULT_RESIGNATION_DECISION_TEMPLATE;
+  const hasDateVariables = decisionType === "POSITION_CHANGE"
+    ? variables.has("hire_date") && (variables.has("effective_date") || variables.has("effective_date_ar"))
+    : variables.has("contract_date") && variables.has("request_date") && (variables.has("effective_date") || variables.has("effective_date_ar"));
+  const hasPositionChangeVariables = decisionType !== "POSITION_CHANGE" || variables.has("new_position");
+  return hasWorkerVariables && hasDateVariables && hasPositionChangeVariables ? normalized : fallback;
 }
 function cleanOverride(value?: string) { return typeof value === "string" && value.trim() ? value.trim() : null; }
+function normalizeDecisionType(value?: string): DecisionType {
+  return DECISION_TYPES.includes(value as DecisionType) ? value as DecisionType : "RESIGNATION";
+}
+function displayEmployeeNumber(employee: { localMatricule: string | null; employeeCode: string; biotimeCode: string | null }, sap?: { sapCompany: string; sapEmpId: string } | null) {
+  if (sap?.sapCompany && sap.sapEmpId) return `${sap.sapEmpId}/${sap.sapCompany}`;
+  return employee.localMatricule || employee.biotimeCode || employee.employeeCode || "___";
+}
 function sapArabicName(payload: unknown) {
   const row = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
   const direct = rawArabicString(row, ["arabicName", "arabic_name", "fullNameArabic", "full_name_ar", "nameArabic", "name_ar", "NomAr", "PrenomAr", "U_CMC_NOMAR", "U_CMC_PRENOMAR", "U_CMC_NomAr", "U_CMC_PrenomAr"]);
