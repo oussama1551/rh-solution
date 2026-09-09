@@ -168,10 +168,11 @@ export class ReportsExportService {
       { header: "Nom Prénom", key: "fullName", width: 28 },
       { header: "Structure / Département", key: "structure", width: 30 },
       ...dates.map(date => ({ header: dayLabel(date), key: date, width: 5 })),
-      ...["P", "A", "M", "C", "CP", "R", "I", "SP", "DC", "EC"].map(code => ({ header: `Total ${code}`, key: `total${code}`, width: 10 }))
+      ...["P", "A", "AA", "AI", "AM", "ADC", "SAN", "AT", "AMA", "AD", "M", "C", "R", "I", "DC", "FC"].map(code => ({ header: `Total ${code}`, key: `total${code}`, width: 10 }))
     ];
     for (const row of rows) {
-      sheet.addRow({ code: row.employee.code, fullName: row.employee.fullName, structure: structureLabel(row), ...Object.fromEntries(dates.map(date => [date, summaryStatusCode(byDay.get(`${row.employee.id}:${date}`))])), totalP: row.presentDays, totalA: row.absentDays, totalM: row.sickDays, totalC: row.leaveDays, totalCP: row.compensatedDays, totalR: row.restDays, totalI: row.incompleteDays, totalSP: row.absenceReversedDays, totalDC: row.contractNotStartedDays, totalEC: row.contractEndedDays });
+      const codes = dates.map(date => effectiveSummaryCode(byDay.get(`${row.employee.id}:${date}`)));
+      sheet.addRow({ code: row.employee.code, fullName: row.employee.fullName, structure: structureLabel(row), ...Object.fromEntries(dates.map((date, index) => [date, codes[index]])), ...Object.fromEntries(["P", "A", "AA", "AI", "AM", "ADC", "SAN", "AT", "AMA", "AD", "M", "C", "R", "I", "DC", "FC"].map(code => [`total${code}`, codes.filter(value => value === code).length])) });
     }
     this.styleWorksheet(sheet);
     sheet.views = [{ state: "frozen", xSplit: 3, ySplit: 1 }];
@@ -185,7 +186,7 @@ export class ReportsExportService {
       const chunks: Buffer[] = [];
       document.on("data", chunk => chunks.push(Buffer.from(chunk)));
       document.on("end", () => resolve(Buffer.concat(chunks)));
-      const dates = dateKeys(startDate, endDate), byDay = dailyStatusMap(daily), totals = ["P", "A", "M", "C", "CP", "R", "I", "SP", "DC", "EC"];
+      const dates = dateKeys(startDate, endDate), byDay = dailyStatusMap(daily), totals = ["P", "A", "AA", "AI", "AM", "ADC", "SAN", "AT", "AMA", "AD", "M", "C", "R", "I", "DC", "FC"];
       const headers = ["Mat.", "Nom Prénom", "Structure", ...dates.map(dayLabel), ...totals.map(code => `T.${code}`)];
       const widths = [46, 92, 104, ...dates.map(() => 18), ...totals.map(() => 22)];
       const drawHeader = () => { document.fontSize(13).text("Rapport de synthèse paie — détaillé", 18, 16); drawPdfRow(document, headers, widths, 38, true); };
@@ -193,7 +194,8 @@ export class ReportsExportService {
       let y = 52;
       for (const row of rows) {
         if (y > document.page.height - 28) { document.addPage(); drawHeader(); y = 52; }
-        drawPdfRow(document, [row.employee.code, row.employee.fullName, structureLabel(row), ...dates.map(date => summaryStatusCode(byDay.get(`${row.employee.id}:${date}`))), String(row.presentDays), String(row.absentDays), String(row.sickDays), String(row.leaveDays), String(row.compensatedDays), String(row.restDays), String(row.incompleteDays), String(row.absenceReversedDays), String(row.contractNotStartedDays), String(row.contractEndedDays)], widths, y, false);
+        const codes = dates.map(date => effectiveSummaryCode(byDay.get(`${row.employee.id}:${date}`)));
+        drawPdfRow(document, [row.employee.code, row.employee.fullName, structureLabel(row), ...codes, ...totals.map(code => String(codes.filter(value => value === code).length))], widths, y, false);
         y += 13;
       }
       document.end();
@@ -242,7 +244,8 @@ export class ReportsExportService {
 
 function dateKeys(startDate: string, endDate: string) { const dates: string[] = [], cursor = new Date(`${startDate}T00:00:00Z`), end = new Date(`${endDate}T00:00:00Z`); while (cursor <= end) { dates.push(cursor.toISOString().slice(0, 10)); cursor.setUTCDate(cursor.getUTCDate() + 1); } return dates; }
 function dayLabel(date: string) { return date.slice(8, 10); }
-function dailyStatusMap(rows: SummaryDailyRecordRow[]) { return new Map(rows.map(row => [`${row.employeeId}:${row.workDate}`, row.status])); }
-export function summaryStatusCode(status?: SummaryDailyRecordRow["status"]) { return status === "PRESENT" ? "P" : status === "ABSENT" ? "A" : status === "SICK" || status === "ACCIDENT" ? "M" : status === "LEAVE" ? "C" : status === "COMPENSATED" ? "CP" : status === "REST" ? "R" : status === "INCOMPLETE" ? "I" : status === "ABSENCE_REVERSED" ? "SP" : status === "CONTRACT_NOT_STARTED" ? "DC" : status === "CONTRACT_ENDED" ? "EC" : ""; }
+function dailyStatusMap(rows: SummaryDailyRecordRow[]) { return new Map(rows.map(row => [`${row.employeeId}:${row.workDate}`, row])); }
+function effectiveSummaryCode(row?: SummaryDailyRecordRow) { return row?.displayCode || summaryStatusCode(row?.status); }
+export function summaryStatusCode(status?: SummaryDailyRecordRow["status"]) { return status === "PRESENT" ? "P" : status === "ABSENT" ? "A" : status === "SICK" || status === "ACCIDENT" ? "M" : status === "LEAVE" ? "C" : status === "COMPENSATED" ? "CP" : status === "REST" ? "R" : status === "INCOMPLETE" ? "I" : status === "ABSENCE_REVERSED" ? "SP" : status === "CONTRACT_NOT_STARTED" ? "DC" : status === "CONTRACT_ENDED" ? "FC" : ""; }
 function structureLabel(row: SummaryReportRow) { return [row.employee.unitName, row.employee.subUnitName, row.employee.groupName].filter(Boolean).join(" > ") || row.employee.department || "-"; }
 function drawPdfRow(document: PDFKit.PDFDocument, values: string[], widths: number[], y: number, header: boolean) { let x = 18; document.font(header ? "Helvetica-Bold" : "Helvetica").fontSize(header ? 5 : 4.5); for (let index = 0; index < values.length; index += 1) { const width = widths[index] || 18; document.rect(x, y, width, 13).strokeColor("#cbd5e1").stroke(); document.fillColor(header ? "#0f172a" : "#334155").text(String(values[index] ?? ""), x + 1, y + 4, { width: width - 2, height: 7, align: index >= 3 ? "center" : "left", ellipsis: true, lineBreak: false }); x += width; } }

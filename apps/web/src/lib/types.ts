@@ -157,6 +157,8 @@ export type AdvancedTreatmentRow = {
     unitName: string | null;
     subUnitName: string | null;
     groupName: string | null;
+    attendanceTrackingExempt: boolean;
+    attendanceExemptReason: string | null;
   };
   periodStart: string;
   periodEnd: string;
@@ -953,6 +955,8 @@ export type SummaryReportRow = {
     unitName: string | null;
     subUnitName: string | null;
     groupName: string | null;
+    attendanceTrackingExempt: boolean;
+    attendanceExemptReason: string | null;
   };
   presentDays: number;
   absentDays: number;
@@ -969,7 +973,7 @@ export type SummaryReportRow = {
   overtimeHoursRate50: number;
   overtimeHoursRate75: number;
   overtimeHoursRate100: number;
-  lastGeneratedAt: string;
+  lastGeneratedAt: string | null;
 };
 
 export type SummaryDailyRecordRow = {
@@ -1086,6 +1090,17 @@ export type PayrollControlRow = {
   confirmedAt?: string | null;
   note?: string | null;
 };
+
+export type ResignationDecision = { id:string; decisionNumber:string; decisionDate:string; effectiveDate:string; generatedAt:string; generatedBy:{fullName:string;username:string} };
+export type ResignationDecisionState = { employee:{id:string;name:string}; unit:{id:string;name:string}; latest:ResignationDecision|null; missingFields:string[] };
+
+export type PayrollSummaryOverride = {
+  id: string; employeeId: string; workDate: string; periodStart: string; periodEnd: string;
+  originalCode: string; overrideCode: string; note: string | null; editedAt: string;
+  editedBy: { id: string; fullName: string; username: string } | null;
+};
+export type PayrollSummaryMotif = { code: string; label: string; source: "RH" | "SAP" };
+export type PayrollSummaryConfirmation = { id: string; employeeId: string; periodStart: string; periodEnd: string; confirmedAt: string; confirmedBy: { id: string; fullName: string; username: string } };
 
 export type EmployeeContract = {
   id: string; employeeId: string; startDate: string; endDate?: string | null; contractType?: string | null; reference?: string | null; note?: string | null; createdAt: string; updatedAt: string;

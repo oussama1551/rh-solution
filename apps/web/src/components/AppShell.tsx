@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Users,
   BookOpenText
+  ,ScrollText
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -42,12 +43,15 @@ const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard;
   { label: "Terminaux", to: "/devices", icon: Monitor, permission: "devices.read" },
   { label: "Rapports", to: "/reports", icon: BarChart3, permission: "reports.read" },
   { label: "Synthèse paie", to: "/reports/summary", icon: BarChart3, permission: "reports.read" },
+  { label: "Synthèse heures sup.", to: "/reports/overtime-summary", icon: Clock, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
   { label: "Traitement avance", to: "/advanced-treatment", icon: ClipboardCheck, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH"] },
   { label: "Contrôle paie", to: "/admin/payroll-control", icon: ShieldCheck, permission: "payroll.control" },
   { label: "Synchronisation", to: "/admin/sync", icon: RefreshCw, permission: "sync.run" },
   { label: "Annuaire SAP", to: "/admin/sap-directory", icon: Users, permission: "employees.manage" },
   { label: "Fiches de poste", to: "/job-descriptions", icon: BookOpenText, permission: "job_description.view" },
   { label: "Administration", to: "/admin/users", icon: Settings, permission: "administration.read" }
+  ,{ label: "Tous les logs", to: "/admin/logs", icon: ScrollText, permission: "audit.read", roles: ["ADMIN"] }
+  ,{ label: "Décisions démission", to: "/admin/resignation-decisions", icon: ScrollText, permission: "administration.read", roles: ["ADMIN"] }
 ];
 
 export function AppShell() {

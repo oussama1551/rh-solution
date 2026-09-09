@@ -22,6 +22,8 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { ResignedEmployeesPage } from "./pages/ResignedEmployeesPage";
 import { SickLeaveDeclarationPage } from "./pages/SickLeaveDeclarationPage";
 import { SummaryReportPage } from "./pages/SummaryReportPage";
+import { OvertimeSummaryPage } from "./pages/OvertimeSummaryPage";
+import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { NotFoundPage, UsersAdminPage } from "./pages/SimplePages";
 import { SyncAdminPage } from "./pages/SyncAdminPage";
 import { SapDirectoryPage } from "./pages/SapDirectoryPage";
@@ -33,6 +35,7 @@ import { JobDescriptionDocumentPage } from "./pages/JobDescriptionDocumentPage";
 import { JobDescriptionWizardPage } from "./pages/JobDescriptionWizardPage";
 import { JobDescriptionImportPage } from "./pages/JobDescriptionImportPage";
 import { JobDescriptionDocumentsPage } from "./pages/JobDescriptionDocumentsPage";
+import { ResignationDecisionSettingsPage } from "./pages/ResignationDecisionSettingsPage";
 
 function Protected() {
   const { user, loading } = useAuth();
@@ -73,11 +76,14 @@ export function App() {
         <Route path="/devices" element={<DevicesPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reports/summary" element={<SummaryReportPage />} />
+        <Route path="/reports/overtime-summary" element={<OvertimeSummaryPage />} />
         <Route path="/advanced-treatment" element={<AdvancedTreatmentPage />} />
         <Route path="/admin/payroll-control" element={<PayrollControlPage />} />
         <Route path="/admin/sync" element={<SyncAdminPage />} />
         <Route path="/admin/sap-directory" element={<SapDirectoryPage />} />
         <Route path="/admin/users" element={<UsersAdminPage />} />
+        <Route path="/admin/logs" element={<AuditLogsPage />} />
+        <Route path="/admin/resignation-decisions" element={<ResignationDecisionSettingsPage />} />
         <Route path="/job-descriptions" element={<JobDescriptionsLibraryPage />} />
         <Route path="/job-descriptions/templates/:id/builder" element={<JobDescriptionBuilderPage />} />
         <Route path="/job-descriptions/validation" element={<JobDescriptionWorkflowPage />} />

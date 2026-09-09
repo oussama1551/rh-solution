@@ -68,6 +68,11 @@ model User {
   reviewedJobDescriptionApprovals JobDescriptionApproval[]        @relation("JobDescriptionApprovalReviewer")
   generatedJobDescriptionFiles    JobDescriptionFile[]            @relation("JobDescriptionFileGenerator")
   createdApprovalWorkflows        JobApprovalWorkflow[]           @relation("JobApprovalWorkflowCreator")
+  payrollSummaryOverrides         PayrollSummaryOverride[]        @relation("PayrollSummaryOverrideEditor")
+  payrollSummaryOverrideHistory   PayrollSummaryOverrideHistory[] @relation("PayrollSummaryOverrideHistoryEditor")
+  payrollSummaryConfirmations     PayrollSummaryConfirmation[]    @relation("PayrollSummaryConfirmer")
+  overtimeSummaryConfirmations    OvertimeSummaryConfirmation[]   @relation("OvertimeSummaryConfirmer")
+  generatedResignationDecisions   ResignationDecision[]           @relation("ResignationDecisionGenerator")
 
   @@map("users")
 }
@@ -427,6 +432,11 @@ model Employee {
   contracts                      EmployeeContract[]
   attendanceExemptBy             User?                           @relation("AttendanceExemptionAuthor", fields: [attendanceExemptById], references: [id], onDelete: SetNull)
   jobDescriptions                EmployeeJobDescription[]
+  payrollSummaryOverrides        PayrollSummaryOverride[]
+  payrollSummaryOverrideHistory  PayrollSummaryOverrideHistory[]
+  payrollSummaryConfirmations    PayrollSummaryConfirmation[]
+  overtimeSummaryConfirmations   OvertimeSummaryConfirmation[]
+  resignationDecisions           ResignationDecision[]
 
   @@index([groupId])
   @@index([status])
@@ -727,16 +737,16 @@ model JobDescriptionVersion {
 }
 
 model JobDescriptionFile {
-  id             String   @id @default(uuid()) @db.Uuid
-  versionId      String   @map("version_id") @db.Uuid
-  fileType       String   @default("PDF") @map("file_type") @db.VarChar(20)
-  relativePath   String   @map("relative_path") @db.VarChar(500)
-  mimeType       String   @map("mime_type") @db.VarChar(120)
-  sizeBytes      Int      @map("size_bytes")
-  sha256         String   @db.VarChar(64)
-  originalName   String   @map("original_name") @db.VarChar(240)
-  generatedById  String   @map("generated_by") @db.Uuid
-  generatedAt    DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+  id            String   @id @default(uuid()) @db.Uuid
+  versionId     String   @map("version_id") @db.Uuid
+  fileType      String   @default("PDF") @map("file_type") @db.VarChar(20)
+  relativePath  String   @map("relative_path") @db.VarChar(500)
+  mimeType      String   @map("mime_type") @db.VarChar(120)
+  sizeBytes     Int      @map("size_bytes")
+  sha256        String   @db.VarChar(64)
+  originalName  String   @map("original_name") @db.VarChar(240)
+  generatedById String   @map("generated_by") @db.Uuid
+  generatedAt   DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
 
   version     JobDescriptionVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
   generatedBy User                  @relation("JobDescriptionFileGenerator", fields: [generatedById], references: [id], onDelete: Restrict)
@@ -940,10 +950,63 @@ model Unit {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  subUnits SubUnit[]
+  legalLogoPath               String? @map("legal_logo_path")
+  fullLegalName               String? @map("full_legal_name") @db.VarChar(240)
+  legalForm                   String? @map("legal_form") @db.VarChar(120)
+  legalAddress                String? @map("legal_address")
+  capitalSocial               String? @map("capital_social") @db.VarChar(120)
+  rcNumber                    String? @map("rc_number") @db.VarChar(120)
+  nifNumber                   String? @map("nif_number") @db.VarChar(120)
+  artNumber                   String? @map("art_number") @db.VarChar(120)
+  legalPhones                 String? @map("legal_phones") @db.VarChar(240)
+  legalEmail                  String? @map("legal_email") @db.VarChar(180)
+  legalWebsite                String? @map("legal_website") @db.VarChar(180)
+  gerantName                  String? @map("gerant_name") @db.VarChar(180)
+  gerantTitle                 String? @map("gerant_title") @db.VarChar(180)
+  resignationDecisionTemplate String? @map("resignation_decision_template")
+
+  subUnits             SubUnit[]
+  resignationDecisions ResignationDecision[]
+  resignationSequences ResignationDecisionSequence[]
 
   @@index([name])
   @@map("units")
+}
+
+model ResignationDecisionSequence {
+  id         String   @id @default(uuid()) @db.Uuid
+  unitId     String   @map("unit_id") @db.Uuid
+  year       Int
+  lastNumber Int      @default(0) @map("last_number")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, year])
+  @@map("resignation_decision_sequences")
+}
+
+model ResignationDecision {
+  id               String   @id @default(uuid()) @db.Uuid
+  employeeId       String   @map("employee_id") @db.Uuid
+  unitId           String   @map("unit_id") @db.Uuid
+  sequenceYear     Int      @map("sequence_year")
+  sequenceNumber   Int      @map("sequence_number")
+  decisionNumber   String   @map("decision_number") @db.VarChar(80)
+  decisionDate     DateTime @map("decision_date") @db.Date
+  effectiveDate    DateTime @map("effective_date") @db.Date
+  generatedById    String   @map("generated_by") @db.Uuid
+  generatedAt      DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+  pdfFilePath      String   @map("pdf_file_path")
+  documentSnapshot Json     @map("document_snapshot")
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  generatedBy User     @relation("ResignationDecisionGenerator", fields: [generatedById], references: [id], onDelete: Restrict)
+
+  @@unique([unitId, sequenceYear, sequenceNumber])
+  @@index([employeeId, generatedAt])
+  @@map("resignation_decisions")
 }
 
 model SubUnit {
@@ -1225,6 +1288,79 @@ model AttendanceSummaryRecord {
   @@index([status])
   @@index([employeeId, periodStart, periodEnd])
   @@map("attendance_summary_records")
+}
+
+model PayrollSummaryOverride {
+  id           String   @id @default(uuid()) @db.Uuid
+  employeeId   String   @map("employee_id") @db.Uuid
+  workDate     DateTime @map("work_date") @db.Date
+  periodStart  DateTime @map("period_start") @db.Date
+  periodEnd    DateTime @map("period_end") @db.Date
+  originalCode String   @map("original_code") @db.VarChar(20)
+  overrideCode String   @map("override_code") @db.VarChar(20)
+  note         String?
+  editedById   String?  @map("edited_by") @db.Uuid
+  editedAt     DateTime @default(now()) @updatedAt @map("edited_at") @db.Timestamptz(6)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  editedBy User?    @relation("PayrollSummaryOverrideEditor", fields: [editedById], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, workDate, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+  @@map("payroll_summary_overrides")
+}
+
+model PayrollSummaryOverrideHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  employeeId   String   @map("employee_id") @db.Uuid
+  workDate     DateTime @map("work_date") @db.Date
+  periodStart  DateTime @map("period_start") @db.Date
+  periodEnd    DateTime @map("period_end") @db.Date
+  previousCode String?  @map("previous_code") @db.VarChar(20)
+  newCode      String?  @map("new_code") @db.VarChar(20)
+  note         String?
+  action       String   @db.VarChar(20)
+  changedById  String?  @map("changed_by") @db.Uuid
+  changedAt    DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  changedBy User?    @relation("PayrollSummaryOverrideHistoryEditor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, workDate, periodStart, periodEnd])
+  @@index([changedAt])
+  @@map("payroll_summary_override_history")
+}
+
+model PayrollSummaryConfirmation {
+  id            String   @id @default(uuid()) @db.Uuid
+  employeeId    String   @map("employee_id") @db.Uuid
+  periodStart   DateTime @map("period_start") @db.Date
+  periodEnd     DateTime @map("period_end") @db.Date
+  confirmedById String   @map("confirmed_by") @db.Uuid
+  confirmedAt   DateTime @default(now()) @map("confirmed_at") @db.Timestamptz(6)
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  confirmedBy User     @relation("PayrollSummaryConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+  @@map("payroll_summary_confirmations")
+}
+
+model OvertimeSummaryConfirmation {
+  id            String   @id @default(uuid()) @db.Uuid
+  employeeId    String   @map("employee_id") @db.Uuid
+  periodStart   DateTime @map("period_start") @db.Date
+  periodEnd     DateTime @map("period_end") @db.Date
+  confirmedById String   @map("confirmed_by") @db.Uuid
+  confirmedAt   DateTime @default(now()) @map("confirmed_at") @db.Timestamptz(6)
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  confirmedBy User     @relation("OvertimeSummaryConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+  @@map("overtime_summary_confirmations")
 }
 
 model PayrollRubricMapping {

@@ -8,13 +8,15 @@ import { ReportsExportService } from "./reports-export.service";
 import { ReportsQueryDto } from "./reports-query.dto";
 import { ReportsService } from "./reports.service";
 import { AttendanceSummaryService } from "./attendance-summary.service";
+import { PayrollSummaryEditorService } from "../payroll-summary-editor/payroll-summary-editor.service";
 
 @Controller("reports")
 export class ReportsController {
   constructor(
     private readonly reports: ReportsService,
     private readonly exports: ReportsExportService,
-    private readonly summary: AttendanceSummaryService
+    private readonly summary: AttendanceSummaryService,
+    private readonly summaryEditor: PayrollSummaryEditorService
   ) {}
 
   @Get("employees/monthly")
@@ -114,7 +116,8 @@ export class ReportsController {
   @Permissions(PermissionCode.ReportsExport)
   async summaryExcel(@Query() query: ReportsQueryDto, @Query("mode") mode: string | undefined, @CurrentUser() actor: RequestUser, @Res() response: Response) {
     const rows = await this.summary.report(query, actor);
-    const buffer = mode === "detailed" ? await this.exports.summaryDetailedExcel(rows, await this.summary.dailyRecords(query, actor), query.startDate, query.endDate) : await this.exports.summaryExcel(rows);
+    const daily = mode === "detailed" ? await this.dailyWithOverrides(query, actor) : [];
+    const buffer = mode === "detailed" ? await this.exports.summaryDetailedExcel(rows, daily, query.startDate, query.endDate) : await this.exports.summaryExcel(rows);
     this.sendFile(response, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mode === "detailed" ? "rapport-synthese-detaille.xlsx" : "rapport-synthese.xlsx");
   }
 
@@ -122,7 +125,8 @@ export class ReportsController {
   @Permissions(PermissionCode.ReportsExport)
   async summaryPdf(@Query() query: ReportsQueryDto, @Query("mode") mode: string | undefined, @CurrentUser() actor: RequestUser, @Res() response: Response) {
     const rows = await this.summary.report(query, actor);
-    const buffer = mode === "detailed" ? await this.exports.summaryDetailedPdf(rows, await this.summary.dailyRecords(query, actor), query.startDate, query.endDate) : await this.exports.summaryPdf(rows);
+    const daily = mode === "detailed" ? await this.dailyWithOverrides(query, actor) : [];
+    const buffer = mode === "detailed" ? await this.exports.summaryDetailedPdf(rows, daily, query.startDate, query.endDate) : await this.exports.summaryPdf(rows);
     this.sendFile(response, buffer, "application/pdf", mode === "detailed" ? "rapport-synthese-detaille.pdf" : "rapport-synthese.pdf");
   }
 
@@ -131,5 +135,11 @@ export class ReportsController {
     response.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     response.setHeader("Content-Length", buffer.length);
     response.end(buffer);
+  }
+
+  private async dailyWithOverrides(query: ReportsQueryDto, actor: RequestUser) {
+    const [daily, overrides] = await Promise.all([this.summary.dailyRecords(query, actor), this.summaryEditor.list(query.startDate, query.endDate, actor)]);
+    const byDay = new Map(overrides.map(item => [`${item.employeeId}:${item.workDate.toISOString().slice(0, 10)}`, item.overrideCode]));
+    return daily.map(row => ({ ...row, displayCode: byDay.get(`${row.employeeId}:${row.workDate}`) }));
   }
 }

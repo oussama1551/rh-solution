@@ -175,7 +175,7 @@ export class ReportsService {
     const rows: PointagePlanningReportRow[] = [];
     for (const employee of employees) {
       for (const workDate of enumerateDateKeys(filters.startDate, filters.endDate)) {
-        if (employee.contracts.length && !employee.contracts.some(contract => toDateKey(contract.startDate) <= workDate && (!contract.endDate || toDateKey(contract.endDate) >= workDate))) continue;
+        if ((employee.contracts || []).length && !(employee.contracts || []).some(contract => toDateKey(contract.startDate) <= workDate && (!contract.endDate || toDateKey(contract.endDate) >= workDate))) continue;
         const key = `${employee.id}:${workDate}`;
         const assignment = assignmentByEmployeeDate.get(key);
         const result = resultByEmployeeDate.get(key);
@@ -525,7 +525,7 @@ export class ReportsService {
   private employeeWhere(filters: ReportFilters, actor?: RequestUser): Prisma.EmployeeWhereInput {
     const and: Prisma.EmployeeWhereInput[] = [];
     and.push(employeeScopeWhere(actor));
-    and.push({ attendanceTrackingExempt: false });
+    if (!filters.includeAttendanceTrackingExempt) and.push({ attendanceTrackingExempt: false });
     if (filters.employeeId) and.push({ id: filters.employeeId });
     if (filters.groupId) and.push({ groupId: filters.groupId });
     else if (filters.subUnitId) and.push({ group: { subUnitId: filters.subUnitId } });

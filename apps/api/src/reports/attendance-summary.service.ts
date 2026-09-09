@@ -327,11 +327,13 @@ export class AttendanceSummaryService {
 
   async report(filters: ReportFilters, actor?: RequestUser): Promise<SummaryReportRow[]> {
     this.validatePeriod(filters.startDate, filters.endDate);
-    const records = await this.prisma.attendanceSummaryRecord.findMany({
+    const summaryFilters = { ...filters, includeAttendanceTrackingExempt: true };
+    const employeeWhere = (this.reports as any).employeeWhere(summaryFilters, actor);
+    const [records, employees] = await Promise.all([this.prisma.attendanceSummaryRecord.findMany({
       where: {
         periodStart: parseDateKey(filters.startDate),
         periodEnd: parseDateKey(filters.endDate),
-        employee: (this.reports as any).employeeWhere(filters, actor)
+        employee: employeeWhere
       },
       include: {
         employee: {
@@ -342,14 +344,26 @@ export class AttendanceSummaryService {
             employeeCode: true,
             fullName: true,
             department: true,
+            attendanceTrackingExempt: true,
+            attendanceExemptReason: true,
             group: { select: { name: true, subUnit: { select: { name: true, unit: { select: { name: true } } } } } }
           }
         }
       },
       orderBy: [{ employee: { fullName: "asc" } }, { workDate: "asc" }]
-    });
+    }), this.prisma.employee.findMany({
+      where: employeeWhere,
+      select: { id: true, localMatricule: true, biotimeCode: true, employeeCode: true, fullName: true, department: true, attendanceTrackingExempt: true, attendanceExemptReason: true, group: { select: { name: true, subUnit: { select: { name: true, unit: { select: { name: true } } } } } } },
+      orderBy: { fullName: "asc" }
+    })]);
 
     const byEmployee = new Map<string, SummaryReportRow>();
+    for (const employee of employees) {
+      byEmployee.set(employee.id, {
+        employee: { id: employee.id, code: employee.localMatricule || employee.biotimeCode || employee.employeeCode, sourceCode: employee.biotimeCode || employee.employeeCode, fullName: employee.fullName, department: employee.department, unitName: employee.group?.subUnit?.unit?.name || null, subUnitName: employee.group?.subUnit?.name || null, groupName: employee.group?.name || null, attendanceTrackingExempt: employee.attendanceTrackingExempt, attendanceExemptReason: employee.attendanceExemptReason },
+        presentDays: 0, absentDays: 0, sickDays: 0, leaveDays: 0, compensatedDays: 0, absenceReversedDays: 0, restDays: 0, incompleteDays: 0, contractNotStartedDays: 0, contractEndedDays: 0, totalWorkedHours: 0, totalOvertimeHours: 0, overtimeHoursRate50: 0, overtimeHoursRate75: 0, overtimeHoursRate100: 0, lastGeneratedAt: null
+      });
+    }
     for (const record of records) {
       const row = byEmployee.get(record.employeeId) || {
         employee: {
@@ -361,6 +375,8 @@ export class AttendanceSummaryService {
           unitName: record.employee.group?.subUnit?.unit?.name || null,
           subUnitName: record.employee.group?.subUnit?.name || null,
           groupName: record.employee.group?.name || null
+          ,attendanceTrackingExempt: record.employee.attendanceTrackingExempt
+          ,attendanceExemptReason: record.employee.attendanceExemptReason
         },
         presentDays: 0,
         absentDays: 0,
@@ -394,7 +410,7 @@ export class AttendanceSummaryService {
       row.overtimeHoursRate50 += Number(record.overtimeHoursRate50);
       row.overtimeHoursRate75 += Number(record.overtimeHoursRate75);
       row.overtimeHoursRate100 += Number(record.overtimeHoursRate100);
-      if (record.generatedAt > row.lastGeneratedAt) row.lastGeneratedAt = record.generatedAt;
+      if (!row.lastGeneratedAt || record.generatedAt > row.lastGeneratedAt) row.lastGeneratedAt = record.generatedAt;
       byEmployee.set(record.employeeId, row);
     }
 
@@ -414,7 +430,7 @@ export class AttendanceSummaryService {
       where: {
         periodStart: parseDateKey(filters.startDate),
         periodEnd: parseDateKey(filters.endDate),
-        employee: (this.reports as any).employeeWhere(filters, actor)
+        employee: (this.reports as any).employeeWhere({ ...filters, includeAttendanceTrackingExempt: true }, actor)
       },
       orderBy: [{ workDate: "asc" }]
     });

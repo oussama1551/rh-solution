@@ -18,7 +18,7 @@ describe("detailed payroll summary export", () => {
     expect(statuses.map(summaryStatusCode)).toEqual(["P", "A", "M", "C", "CP", "R", "I", "SP"]);
     expect(summaryStatusCode("ACCIDENT")).toBe("M");
     expect(summaryStatusCode("CONTRACT_NOT_STARTED")).toBe("DC");
-    expect(summaryStatusCode("CONTRACT_ENDED")).toBe("EC");
+    expect(summaryStatusCode("CONTRACT_ENDED")).toBe("FC");
   });
 
   it("classifies dates outside a contract without treating legacy employees as outside contract", () => {
@@ -34,7 +34,7 @@ describe("detailed payroll summary export", () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as any);
     const sheet = workbook.worksheets[0];
-    expect(sheet.getRow(1).values).toEqual(expect.arrayContaining(["01", "08", "Total P", "Total SP"]));
+    expect(sheet.getRow(1).values).toEqual(expect.arrayContaining(["01", "08", "Total P", "Total DC", "Total FC"]));
     expect(sheet.getRow(2).getCell(12).value).toBe(1);
   });
 

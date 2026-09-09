@@ -10,6 +10,7 @@ export type ReportFilters = {
   unitId?: string;
   search?: string;
   status?: EmployeeStatus;
+  includeAttendanceTrackingExempt?: boolean;
 };
 
 export type MonthlyEmployeeReport = {
@@ -160,6 +161,8 @@ export type SummaryReportRow = {
     unitName: string | null;
     subUnitName: string | null;
     groupName: string | null;
+    attendanceTrackingExempt: boolean;
+    attendanceExemptReason: string | null;
   };
   presentDays: number;
   absentDays: number;
@@ -176,7 +179,7 @@ export type SummaryReportRow = {
   overtimeHoursRate50: number;
   overtimeHoursRate75: number;
   overtimeHoursRate100: number;
-  lastGeneratedAt: Date;
+  lastGeneratedAt: Date | null;
 };
 
 export type SummaryDailyRecordRow = {
@@ -193,4 +196,5 @@ export type SummaryDailyRecordRow = {
   leaveType: string | null;
   exceptionalReason: string | null;
   generatedAt: Date;
+  displayCode?: string;
 };

@@ -129,7 +129,7 @@ export function ReportsPage() {
                 { key: "ot75", header: "Sup. 75%", render: row => `${row.overtimeHoursRate75} h`, sortValue: row => row.overtimeHoursRate75 },
                 { key: "ot100", header: "Sup. 100%", render: row => `${row.overtimeHoursRate100} h`, sortValue: row => row.overtimeHoursRate100 },
                 { key: "ot", header: "Total sup.", render: row => `${row.totalOvertimeHours} h`, sortValue: row => row.totalOvertimeHours },
-                { key: "generated", header: "Généré", render: row => new Date(row.lastGeneratedAt).toLocaleString("fr-FR"), sortValue: row => row.lastGeneratedAt }
+                { key: "generated", header: "Généré", render: row => row.lastGeneratedAt ? new Date(row.lastGeneratedAt).toLocaleString("fr-FR") : "Non généré", sortValue: row => row.lastGeneratedAt || "" }
               ]}
             />
           </div>

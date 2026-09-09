@@ -21,6 +21,9 @@ import { ShiftsModule } from "./shifts/shifts.module";
 import { SyncModule } from "./sync/sync.module";
 import { UsersModule } from "./users/users.module";
 import { JobDescriptionsModule } from "./job-descriptions/job-descriptions.module";
+import { PayrollSummaryEditorModule } from "./payroll-summary-editor/payroll-summary-editor.module";
+import { OvertimeSummaryModule } from "./overtime-summary/overtime-summary.module";
+import { ResignationDecisionsModule } from "./resignation-decisions/resignation-decisions.module";
 
 @Module({
   imports: [
@@ -42,7 +45,10 @@ import { JobDescriptionsModule } from "./job-descriptions/job-descriptions.modul
     ShiftsModule,
     SyncModule,
     UsersModule,
-    JobDescriptionsModule
+    JobDescriptionsModule,
+    PayrollSummaryEditorModule,
+    OvertimeSummaryModule,
+    ResignationDecisionsModule
   ],
   providers: [
     {
