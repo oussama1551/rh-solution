@@ -1093,6 +1093,14 @@ export type PayrollControlRow = {
 
 export type ResignationDecision = { id:string; decisionNumber:string; decisionDate:string; effectiveDate:string; generatedAt:string; generatedBy:{fullName:string;username:string} };
 export type ResignationDecisionState = { employee:{id:string;name:string}; unit:{id:string;name:string}; latest:ResignationDecision|null; missingFields:string[] };
+export type ResignationDecisionDraft = {
+  employee: { id:string; name:string; matricule:string|null; biotimeCode:string|null; department:string|null; hireDate:string|null };
+  sap: { code:string; company:string; name:string; poste:string|null; structure:string|null; phone:string|null } | null;
+  unit: { id:string; name:string; legalName:string|null; gerantName:string|null; gerantTitle:string|null };
+  decision: { employeeName:string; employeePosition:string; contractDate:string; requestDate:string; effectiveDate:string; gerantName:string };
+  sources: Record<string, string>;
+  missingFields: string[];
+};
 
 export type PayrollSummaryOverride = {
   id: string; employeeId: string; workDate: string; periodStart: string; periodEnd: string;

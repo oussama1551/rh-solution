@@ -8,7 +8,7 @@ import { useApi } from "../lib/useApi";
 
 type LegalUnit = { id:string; name:string; code:string; legalLogoPath:string|null; fullLegalName:string|null; legalForm:string|null; legalAddress:string|null; capitalSocial:string|null; rcNumber:string|null; nifNumber:string|null; artNumber:string|null; legalPhones:string|null; legalEmail:string|null; legalWebsite:string|null; gerantName:string|null; gerantTitle:string|null; resignationDecisionTemplate:string|null };
 const fields: Array<[keyof LegalUnit,string]> = [["fullLegalName","Nom légal complet"],["legalForm","Forme juridique"],["legalAddress","Adresse"],["capitalSocial","Capital social"],["rcNumber","RC"],["nifNumber","NIF"],["artNumber","ART"],["legalPhones","Téléphones"],["legalEmail","E-mail"],["legalWebsite","Site web"],["gerantName","Nom du gérant / mandataire"],["gerantTitle","Titre du signataire"]];
-const variables = ["{{employee_name}}", "{{employee_position}}", "{{decision_number}}", "{{decision_date}}", "{{effective_date}}", "{{company_legal_name}}", "{{gerant_name}}"];
+const variables = ["{{employee_name}}", "{{employee_position}}", "{{decision_number}}", "{{decision_number_ar}}", "{{decision_sequence}}", "{{decision_year}}", "{{decision_date}}", "{{contract_date}}", "{{request_date}}", "{{effective_date}}", "{{effective_date_ar}}", "{{company_legal_name}}", "{{gerant_name}}"];
 
 export function ResignationDecisionSettingsPage() {
   const { user } = useAuth(); const units = useApi<LegalUnit[]>("/api/resignation-decisions/units", []); const [selectedId,setSelectedId]=useState(""); const [form,setForm]=useState<LegalUnit|null>(null); const [message,setMessage]=useState("");

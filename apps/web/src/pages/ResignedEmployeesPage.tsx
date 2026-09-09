@@ -1,5 +1,5 @@
-import { FileText, LoaderCircle, RefreshCw, RotateCcw, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FileText, LoaderCircle, RefreshCw, RotateCcw, Search, X } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { DataTable } from "../components/DataTable";
 import { FilterField, FiltersBar } from "../components/FiltersBar";
@@ -7,7 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
-import { ResignRecordRow, ResignationDecision, ResignationDecisionState } from "../lib/types";
+import { ResignRecordRow, ResignationDecision, ResignationDecisionDraft, ResignationDecisionState } from "../lib/types";
 import { useApi, useSessionFilters } from "../lib/useApi";
 
 export function ResignedEmployeesPage() {
@@ -28,13 +28,23 @@ export function ResignedEmployeesPage() {
   const canGenerateDecision = Boolean(user?.roles.some(role => ["ADMIN", "DRH"].includes(role)));
   const [decisionBusy,setDecisionBusy]=useState<string|null>(null);
   const [decisionProgress,setDecisionProgress]=useState<{label:string;value:number}|null>(null);
+  const [decisionDraft,setDecisionDraft]=useState<{row:ResignRecordRow;regenerate:boolean;data:ResignationDecisionDraft}|null>(null);
 
   async function decision(row: ResignRecordRow, regenerate=false) {
     const employeeId=row.employee?.id; if(!employeeId)return setError("Employé local non lié : génération impossible."); setDecisionBusy(row.id);setDecisionProgress({label:"Vérification du dossier...",value:20});setError(null);
     try { const state=await api<ResignationDecisionState>(`/api/resignation-decisions/employee/${employeeId}`); if(state.latest&&!regenerate){setDecisionProgress({label:"Préparation du téléchargement...",value:70});await download(state.latest);return;}
       if(regenerate&&!window.confirm("Régénérer attribuera un nouveau numéro définitif. Continuer ?"))return;
-      if(state.missingFields.length&&!window.confirm(`Informations manquantes : ${state.missingFields.join(", ")}. Elles seront remplacées par ___. Continuer ?`))return;
-      setDecisionProgress({label:"Génération du document arabe...",value:45});const effective=(row.resignDate||new Date().toISOString()).slice(0,10); const generated=await api<ResignationDecision>(`/api/resignation-decisions/employee/${employeeId}/generate`,{method:"POST",body:JSON.stringify({effectiveDate:effective,regenerate})}); setDecisionProgress({label:"Préparation du téléchargement...",value:75});await download(generated); await rows.reload();
+      setDecisionProgress({label:"Préparation des données...",value:40}); const data=await api<ResignationDecisionDraft>(`/api/resignation-decisions/employee/${employeeId}/preview`);
+      setDecisionDraft({row,regenerate,data}); setDecisionProgress(null);
+    } catch(err){setError(readableError(err,"Génération impossible."));} finally{setDecisionBusy(null); if(!decisionDraft)window.setTimeout(()=>setDecisionProgress(null),700);}
+  }
+  async function generateFromDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if(!decisionDraft)return; const employeeId=decisionDraft.row.employee?.id; if(!employeeId)return;
+    const form = new FormData(event.currentTarget); const overrides = Object.fromEntries(["employeeName","employeePosition","contractDate","requestDate","effectiveDate","gerantName"].map(key => [key, String(form.get(key) || "")]));
+    setDecisionBusy(decisionDraft.row.id); setDecisionProgress({label:"Génération du document arabe...",value:45}); setError(null);
+    try {
+      const generated=await api<ResignationDecision>(`/api/resignation-decisions/employee/${employeeId}/generate`,{method:"POST",body:JSON.stringify({regenerate:decisionDraft.regenerate,overrides})});
+      setDecisionProgress({label:"Préparation du téléchargement...",value:75}); await download(generated); setDecisionDraft(null); await rows.reload();
     } catch(err){setError(readableError(err,"Génération impossible."));} finally{setDecisionBusy(null);window.setTimeout(()=>setDecisionProgress(null),700);}
   }
   async function download(value:ResignationDecision){
@@ -109,8 +119,38 @@ export function ResignedEmployeesPage() {
           ]}
         />
       </section>
+      {decisionDraft&&<DecisionDraftModal draft={decisionDraft.data} busy={decisionBusy===decisionDraft.row.id} regenerate={decisionDraft.regenerate} onClose={()=>setDecisionDraft(null)} onSubmit={generateFromDraft}/>}
     </>
   );
+}
+
+function DecisionDraftModal({ draft, busy, regenerate, onClose, onSubmit }: { draft: ResignationDecisionDraft; busy:boolean; regenerate:boolean; onClose:()=>void; onSubmit:(event:FormEvent<HTMLFormElement>)=>void }) {
+  return <div className="modal-backdrop"><form className="app-modal resignation-draft-modal" onSubmit={onSubmit}>
+    <div className="modal-header"><div><span>Préparation du document</span><strong>{regenerate ? "Régénérer la décision" : "Décision de démission"}</strong></div><button type="button" className="icon-button" onClick={onClose}><X size={18}/></button></div>
+    <div className="decision-source-grid">
+      <SourceCard title="RH / BioTime" rows={[["Nom", draft.employee.name],["Matricule", draft.employee.matricule],["BioTime", draft.employee.biotimeCode],["Département", draft.employee.department],["Embauche", displayDate(draft.employee.hireDate)]]}/>
+      <SourceCard title="SAP" rows={draft.sap ? [["Nom SAP", draft.sap.name],["Code SAP", draft.sap.code],["Poste", draft.sap.poste],["Structure", draft.sap.structure],["Téléphone", draft.sap.phone]] : [["Statut", "Aucun lien SAP trouvé"]]}/>
+      <SourceCard title="Société" rows={[["Unité", draft.unit.name],["Nom légal", draft.unit.legalName],["Signataire", draft.unit.gerantName],["Titre", draft.unit.gerantTitle]]}/>
+    </div>
+    {!!draft.missingFields.length&&<div className="alert alert-warning">Champs à vérifier : {draft.missingFields.join(", ")}</div>}
+    <div className="decision-draft-form">
+      <DraftField name="employeeName" label="Nom dans la décision" value={draft.decision.employeeName} source={draft.sources.employeeName}/>
+      <DraftField name="employeePosition" label="Poste dans la décision" value={draft.decision.employeePosition} source={draft.sources.employeePosition}/>
+      <DraftField name="contractDate" label="Date du contrat" type="date" value={draft.decision.contractDate} source={draft.sources.contractDate}/>
+      <DraftField name="requestDate" label="Date demande démission" type="date" value={draft.decision.requestDate} source="Manuel / décision"/>
+      <DraftField name="effectiveDate" label="Date effet décision" type="date" value={draft.decision.effectiveDate} source={draft.sources.effectiveDate}/>
+      <DraftField name="gerantName" label="Signataire" value={draft.decision.gerantName} source={draft.sources.gerantName}/>
+    </div>
+    <div className="modal-actions"><Button type="button" variant="ghost" onClick={onClose}>Annuler</Button><Button type="submit" variant="primary" disabled={busy}>{busy ? "Génération..." : "Générer le PDF"}</Button></div>
+  </form></div>;
+}
+
+function SourceCard({ title, rows }: { title:string; rows:Array<[string,string|null|undefined]> }) {
+  return <div className="decision-source-card"><strong>{title}</strong>{rows.map(([label,value])=><span key={label}><small>{label}</small><b>{value || "-"}</b></span>)}</div>;
+}
+
+function DraftField({ name, label, value, source, type="text" }: { name:string; label:string; value:string|null|undefined; source?:string; type?:string }) {
+  return <label className="filter-field"><span>{label}</span><input name={name} type={type} defaultValue={value || ""}/>{source&&<small>Source: {source}</small>}</label>;
 }
 
 function displayMatricule(row: ResignRecordRow) {

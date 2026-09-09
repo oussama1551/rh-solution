@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { substituteVariables } from "../src/resignation-decisions/resignation-decisions.service";
+import { normalizeResignationTemplateForPdf, substituteVariables } from "../src/resignation-decisions/resignation-decisions.service";
 
 describe("resignation decisions", () => {
   it("substitue les variables et rend les valeurs absentes visibles", () => {
@@ -18,5 +18,10 @@ describe("resignation decisions", () => {
     const sql = readFileSync(join(__dirname, "../prisma/migrations/20260909103000_resignation_decisions/migration.sql"), "utf8");
     expect(sql).toContain('"document_snapshot" JSONB NOT NULL');
     expect(sql).toContain('"pdf_file_path" TEXT NOT NULL');
+  });
+
+  it("nettoie les marqueurs Markdown collés dans le modèle arabe", () => {
+    expect(normalizeResignationTemplateForPdf("***المادة 01****: نص&#xA0;تجريبي"))
+      .toBe("المادة 01: نص تجريبي");
   });
 });

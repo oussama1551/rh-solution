@@ -11,8 +11,36 @@ import { PrismaService } from "../prisma/prisma.service";
 
 const STORAGE = resolve(process.cwd(), "storage", "resignation-decisions");
 const PROFILE_FIELDS = ["fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle", "resignationDecisionTemplate"] as const;
-export const AVAILABLE_VARIABLES = ["employee_name", "employee_position", "decision_number", "decision_date", "effective_date", "company_legal_name", "gerant_name"];
-const DEFAULT_TEMPLATE = `بناء على طلب استقالة السيد(ة) {{employee_name}}،\nوبناء على أحكام القانون رقم 90-11 المتعلق بعلاقات العمل،\nيُقرر\nالمادة الأولى: تُقبل استقالة السيد(ة) {{employee_name}} من منصب {{employee_position}}.\nالمادة الثانية: يسري مفعول هذا القرار ابتداء من {{effective_date}}.\nالمادة الثالثة: يلتزم المعني بإرجاع عتاد الشركة مقابل شهادة العمل ورصيد كل حساب.\nالمادة الرابعة: يكلف مسؤولو الموارد البشرية والإنتاج والمالية بتنفيذ هذا القرار.`;
+export const AVAILABLE_VARIABLES = ["employee_name", "employee_position", "decision_number", "decision_number_ar", "decision_sequence", "decision_year", "decision_date", "contract_date", "request_date", "effective_date", "effective_date_ar", "company_legal_name", "gerant_name"];
+const DEFAULT_TEMPLATE = `المديريــــــــــــــة العامـــــــــــــــة
+مديريـــــــــة الموارد البشريـــــــــة
+رقم {{decision_sequence}} / م ع/ م م ب/{{decision_year}}
+قـــــــرار الاستقالـــة
+
+- بمقتضى عقد تأسيس الشركة رقم 40/2011 الصادر في 10/01/2011 المتضمن انشاء شركة ذات المسؤولية المحدودة "فابكوم"
+- بمقتضى عقد تعديل القانون الأساسي للشركة رقم 970/2017 الصادر في 21 و 25/12/2017 المتضمن تعيين السيد: عطية عصام مسير لشركة فابكوم ش.ذ.م.م
+- بمقتضى القانون 90-11 في 23/04/1990 والمتعلق بعلاقات العمل سيما المادة 12.
+- بناء على النظام الداخلي للمؤسسة المؤرخ في 20 مارس 2022.
+- بمقتضى احكام المواد 12 و13 من عقد عمل المعني المؤرخ في {{contract_date}}
+- بناء على طلب المعني الاستقالة من منصب عمله المؤرخ في {{request_date}}
+- بناء على قبولنا.
+
+يقـــــــــــــــــــــــــــــــــرر
+
+المادة 01: يوافق على استقالة السيد {{employee_name}} من منصب {{employee_position}}.
+المادة 02: يسرى مفعول هذا القرار ابتداء من تاريخ {{effective_date_ar}}
+المادة 03: يلتزم المعني بإعادة معدات الشركة التي في حوزته مقابل استفادته من شهادة العمل وتصفية كل الحساب
+المادة 04: يكلف مدير الموارد البشرية ومسؤول الإنتاج ومسؤول المالية والمحاسبة بتنفيذ هذا القرار.
+
+نسخة:
+المعنـــــــي
+ملف المعني
+
+مسير الشركة
+{{gerant_name}}`;
+
+type DecisionGenerateBody = { decisionDate?: string; effectiveDate?: string; requestDate?: string; regenerate?: boolean; overrides?: DecisionOverrides };
+type DecisionOverrides = { employeeName?: string; employeePosition?: string; contractDate?: string; requestDate?: string; effectiveDate?: string; gerantName?: string };
 
 @Injectable()
 export class ResignationDecisionsService {
@@ -45,18 +73,64 @@ export class ResignationDecisionsService {
     return { employee: { id: context.employee.id, name: context.employee.fullName }, unit: { id: context.unit.id, name: context.unit.name }, latest, missingFields: this.missing(context) };
   }
 
-  async generate(employeeId: string, body: { decisionDate?: string; effectiveDate?: string; regenerate?: boolean }, actor: RequestUser) {
+  async preview(employeeId: string, actor: RequestUser) {
+    this.generatorOnly(actor);
+    const context = await this.context(employeeId);
+    const decisionDate = new Date();
+    const effectiveDate = context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate || decisionDate;
+    const contractDate = contractStart(context.employee.contracts, effectiveDate) || context.employee.hireDate || decisionDate;
+    const sap = context.employee.sapDirectoryRecords[0] || null;
+    const biotimePosition = position(context.employee.sourcePayload);
+    return {
+      employee: {
+        id: context.employee.id,
+        name: context.employee.fullName,
+        matricule: context.employee.localMatricule || context.employee.biotimeCode || context.employee.employeeCode,
+        biotimeCode: context.employee.biotimeCode || context.employee.zktecoId,
+        department: context.employee.department,
+        hireDate: context.employee.hireDate
+      },
+      sap: sap ? {
+        code: `${sap.sapCompany}-${sap.sapEmpId}`,
+        company: sap.sapCompany,
+        name: sap.fullName,
+        poste: sap.poste,
+        structure: sap.structure,
+        phone: sap.mobile
+      } : null,
+      unit: { id: context.unit.id, name: context.unit.name, legalName: context.unit.fullLegalName, gerantName: context.unit.gerantName, gerantTitle: context.unit.gerantTitle },
+      decision: {
+        employeeName: context.employee.fullName || sap?.fullName || "",
+        employeePosition: biotimePosition || sap?.poste || "",
+        contractDate: isoDate(contractDate),
+        requestDate: isoDate(decisionDate),
+        effectiveDate: isoDate(effectiveDate),
+        gerantName: context.unit.gerantName || ""
+      },
+      sources: {
+        employeeName: "RH Solution / BioTime",
+        employeePosition: biotimePosition ? "BioTime" : sap?.poste ? "SAP" : "Manuel",
+        contractDate: context.employee.contracts.length ? "Contrats RH" : context.employee.hireDate ? "BioTime" : "Manuel",
+        effectiveDate: context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate ? "BioTime démission" : "Manuel",
+        gerantName: context.unit.gerantName ? "Paramétrage société" : "Manuel"
+      },
+      missingFields: this.missing(context)
+    };
+  }
+
+  async generate(employeeId: string, body: DecisionGenerateBody, actor: RequestUser) {
     this.generatorOnly(actor);
     const previous = await this.prisma.resignationDecision.findFirst({ where: { employeeId }, orderBy: { generatedAt: "desc" }, select: decisionSelect });
     if (previous && !body.regenerate) return previous;
     const context = await this.context(employeeId); const decisionDate = parseDate(body.decisionDate || isoDate(new Date()), "Date de décision invalide.");
-    const effectiveDate = parseDate(body.effectiveDate || (context.employee.resignedAt ? isoDate(context.employee.resignedAt) : isoDate(new Date())), "Date d'effet invalide.");
+    const effectiveDate = parseDate(body.overrides?.effectiveDate || body.effectiveDate || (context.employee.resignedAt ? isoDate(context.employee.resignedAt) : isoDate(new Date())), "Date d'effet invalide.");
+    const requestDate = parseDate(body.overrides?.requestDate || body.requestDate || body.decisionDate || isoDate(new Date()), "Date de demande invalide.");
     const year = decisionDate.getUTCFullYear(); await mkdir(join(STORAGE, "pdf", String(year)), { recursive: true });
 
     const saved = await this.prisma.$transaction(async tx => {
       const sequence = await tx.$queryRaw<Array<{ last_number: number }>>`INSERT INTO "resignation_decision_sequences" ("id", "unit_id", "year", "last_number", "updated_at") VALUES (${randomUUID()}::uuid, ${context.unit.id}::uuid, ${year}, 1, NOW()) ON CONFLICT ("unit_id", "year") DO UPDATE SET "last_number" = "resignation_decision_sequences"."last_number" + 1, "updated_at" = NOW() RETURNING "last_number"`;
       const number = `${String(sequence[0].last_number).padStart(2, "0")}/DG/RH/${year}`;
-      const snapshot = await this.snapshot(context, number, decisionDate, effectiveDate); const html = await this.html(snapshot); const buffer = await this.renderPdf(html);
+      const snapshot = await this.snapshot(context, number, sequence[0].last_number, decisionDate, effectiveDate, requestDate, body.overrides); const html = await this.html(snapshot); const buffer = await this.renderPdf(html);
       const id = randomUUID(); const path = join(STORAGE, "pdf", String(year), `${id}.pdf`); await writeFile(path, buffer);
       return tx.resignationDecision.create({ data: { id, employeeId, unitId: context.unit.id, sequenceYear: year, sequenceNumber: sequence[0].last_number, decisionNumber: number, decisionDate, effectiveDate, generatedById: actor.id, pdfFilePath: path, documentSnapshot: snapshot as unknown as Prisma.InputJsonValue }, select: decisionSelect });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 45_000 });
@@ -67,14 +141,59 @@ export class ResignationDecisionsService {
   async pdf(id: string, actor: RequestUser) { this.generatorOnly(actor); const row = await this.prisma.resignationDecision.findUnique({ where: { id } }); if (!row || !existsSync(row.pdfFilePath)) throw new NotFoundException("PDF historique introuvable."); return { buffer: await readFile(row.pdfFilePath), number: row.decisionNumber }; }
 
   private async context(employeeId: string) {
-    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, include: { group: { include: { subUnit: { include: { unit: true } } } } } });
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      include: {
+        contracts: { orderBy: { startDate: "desc" } },
+        resignRecords: { orderBy: [{ resignDate: "desc" }, { updatedAt: "desc" }], take: 1 },
+        sapDirectoryRecords: { orderBy: { lastSyncedAt: "desc" }, take: 1 },
+        group: { include: { subUnit: { include: { unit: true } } } }
+      }
+    });
     if (!employee || employee.status !== "RESIGNED") throw new BadRequestException("L'employé doit être démissionné."); const unit = employee.group?.subUnit.unit;
     if (!unit) throw new BadRequestException("Société introuvable dans l'organigramme de l'employé."); return { employee, unit };
   }
-  private missing(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>) { const missing: string[] = []; if (!c.unit.fullLegalName) missing.push("company_legal_name"); if (!c.unit.gerantName) missing.push("gerant_name"); if (!position(c.employee.sourcePayload)) missing.push("employee_position"); if (!c.unit.resignationDecisionTemplate) missing.push("resignation_decision_template"); if (!c.unit.legalLogoPath) missing.push("logo"); return missing; }
-  private async snapshot(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, number: string, decisionDate: Date, effectiveDate: Date) { const vars: Record<string,string> = { employee_name: c.employee.fullName || "___", employee_position: position(c.employee.sourcePayload) || "___", decision_number: number, decision_date: formatDate(decisionDate), effective_date: formatDate(effectiveDate), company_legal_name: c.unit.fullLegalName || c.unit.name || "___", gerant_name: c.unit.gerantName || "___" }; const template = c.unit.resignationDecisionTemplate || DEFAULT_TEMPLATE; return { vars, content: substituteVariables(template, vars), unit: Object.fromEntries(["name", "fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle"].map(k => [k, (c.unit as any)[k] || "___"])), logo: c.unit.legalLogoPath && existsSync(c.unit.legalLogoPath) ? `data:${extname(c.unit.legalLogoPath) === ".png" ? "image/png" : "image/jpeg"};base64,${(await readFile(c.unit.legalLogoPath)).toString("base64")}` : null };
+  private missing(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>) {
+    const used = templateVariables(c.unit.resignationDecisionTemplate || DEFAULT_TEMPLATE);
+    const missing: string[] = [];
+    if (used.has("company_legal_name") && !c.unit.fullLegalName) missing.push("company_legal_name");
+    if (used.has("gerant_name") && !c.unit.gerantName) missing.push("gerant_name");
+    if (used.has("employee_position") && !position(c.employee.sourcePayload)) missing.push("employee_position");
+    return missing;
   }
-  private async html(s: any) { const fontPath = "C:\\Windows\\Fonts\\arial.ttf"; const font = existsSync(fontPath) ? (await readFile(fontPath)).toString("base64") : ""; return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>@font-face{font-family:ArabicLocal;src:url(data:font/ttf;base64,${font})}*{box-sizing:border-box}body{font-family:ArabicLocal,Arial,sans-serif;direction:rtl;margin:24mm 18mm;font-size:14px;line-height:1.85;color:#111}.header{display:grid;grid-template-columns:150px 1fr;direction:ltr;border-bottom:2px solid #222;padding-bottom:12px}.logo{max-width:135px;max-height:85px}.legal{direction:rtl;text-align:right;font-size:10px;line-height:1.45}.titles{text-align:center;margin:22px 0 16px}.titles h2,.titles h3{margin:2px}.content{white-space:pre-wrap;text-align:justify;font-size:16px}.footer{margin-top:30px;display:flex;justify-content:space-between}.signature{text-align:center;min-width:220px}</style></head><body><header class="header"><div>${s.logo ? `<img class="logo" src="${s.logo}">` : ""}</div><div class="legal"><strong>${esc(s.unit.fullLegalName)}</strong><br>${esc(s.unit.legalForm)} — ${esc(s.unit.legalAddress)}<br>رأس المال: ${esc(s.unit.capitalSocial)} | س.ت: ${esc(s.unit.rcNumber)} | ن.ت: ${esc(s.unit.nifNumber)} | ر.ج: ${esc(s.unit.artNumber)}<br>${esc(s.unit.legalPhones)} | ${esc(s.unit.legalEmail)} | ${esc(s.unit.legalWebsite)}</div></header><section class="titles"><h3>المديرية العامة</h3><h3>مديرية الموارد البشرية</h3><h2>قرار رقم ${esc(s.vars.decision_number)}</h2><h2>قرار الاستقالة</h2></section><main class="content">${esc(s.content)}</main><footer class="footer"><div>نسخة: المعني، ملف المعني</div><div class="signature">${esc(s.unit.gerantTitle)}<br><strong>${esc(s.unit.gerantName)}</strong></div></footer></body></html>`; }
+  private async snapshot(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, number: string, sequence: number, decisionDate: Date, effectiveDate: Date, requestDate: Date, overrides?: DecisionOverrides) {
+    const contractDate = overrides?.contractDate ? parseDate(overrides.contractDate, "Date de contrat invalide.") : (contractStart(c.employee.contracts, effectiveDate) || c.employee.hireDate || requestDate);
+    const sap = c.employee.sapDirectoryRecords[0] || null;
+    const employeePosition = cleanOverride(overrides?.employeePosition) || position(c.employee.sourcePayload) || sap?.poste || "___";
+    const vars: Record<string,string> = {
+      employee_name: cleanOverride(overrides?.employeeName) || c.employee.fullName || sap?.fullName || "___",
+      employee_position: employeePosition,
+      decision_number: number,
+      decision_number_ar: `${String(sequence).padStart(2, "0")} / م ع/ م م ب/${decisionDate.getUTCFullYear()}`,
+      decision_sequence: String(sequence).padStart(2, "0"),
+      decision_year: String(decisionDate.getUTCFullYear()),
+      decision_date: formatDate(decisionDate),
+      contract_date: formatDate(contractDate),
+      request_date: formatDate(requestDate),
+      effective_date: formatDate(effectiveDate),
+      effective_date_ar: formatArabicDate(effectiveDate),
+      company_legal_name: c.unit.fullLegalName || c.unit.name || "___",
+      gerant_name: cleanOverride(overrides?.gerantName) || c.unit.gerantName || "___"
+    };
+    const template = normalizeTemplateText(c.unit.resignationDecisionTemplate || DEFAULT_TEMPLATE);
+    return {
+      vars,
+      content: substituteVariables(template, vars),
+      unit: Object.fromEntries(["name", "fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle"].map(k => [k, (c.unit as any)[k] || "___"])),
+      logo: c.unit.legalLogoPath && existsSync(c.unit.legalLogoPath) ? `data:${extname(c.unit.legalLogoPath) === ".png" ? "image/png" : "image/jpeg"};base64,${(await readFile(c.unit.legalLogoPath)).toString("base64")}` : null
+    };
+  }
+  private async html(s: any) {
+    const fontPath = "C:\\Windows\\Fonts\\arial.ttf";
+    const font = existsSync(fontPath) ? (await readFile(fontPath)).toString("base64") : "";
+    const lines = renderDecisionLines(String(s.content || ""));
+    return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>@font-face{font-family:ArabicLocal;src:url(data:font/ttf;base64,${font})}*{box-sizing:border-box}@page{size:A4;margin:0}html,body{margin:0;padding:0;background:white}.page{font-family:ArabicLocal,Arial,sans-serif;direction:rtl;width:210mm;min-height:297mm;padding:18mm 20mm 14mm;color:#111;font-size:14.2px;line-height:1.72}.doc-head-line{text-align:center;font-weight:800;font-size:15.5px;line-height:1.7}.content{margin-top:14px}.decision-line{margin:4px 0;text-align:justify;page-break-inside:avoid}.decision-line.blank{height:8px;margin:0}.decision-line.recital{padding-right:16px;text-indent:-13px}.decision-line.center{text-align:center;font-weight:800;font-size:17px;margin:15px 0 12px}.decision-line.article{font-size:15px;margin:7px 0}.decision-line.article strong{font-weight:800}.copies{margin-top:20px;line-height:1.85}.signature{margin-top:10mm;margin-right:auto;width:58mm;text-align:center;line-height:1.9;font-size:15px}.signature + .signature{margin-top:0}.signature strong{font-weight:800}</style></head><body><main class="page">${lines}</main></body></html>`;
+  }
   private async renderPdf(html: string) { const executablePath = chromePath(); const browser = await puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }); try { const page = await browser.newPage(); await page.setContent(html, { waitUntil: "load" }); return Buffer.from(await page.pdf({ format: "A4", printBackground: true })); } finally { await browser.close(); } }
   private adminOnly(actor: RequestUser) { if (!actor.roles.includes("ADMIN")) throw new ForbiddenException("Paramétrage réservé à Admin."); }
   private generatorOnly(actor: RequestUser) { if (!actor.roles.some(r => r === "ADMIN" || r === "DRH")) throw new ForbiddenException("Génération réservée à Admin et DRH."); }
@@ -83,8 +202,38 @@ export class ResignationDecisionsService {
 const unitSelect = { id: true, name: true, code: true, legalLogoPath: true, fullLegalName: true, legalForm: true, legalAddress: true, capitalSocial: true, rcNumber: true, nifNumber: true, artNumber: true, legalPhones: true, legalEmail: true, legalWebsite: true, gerantName: true, gerantTitle: true, resignationDecisionTemplate: true } as const;
 const decisionSelect = { id: true, decisionNumber: true, decisionDate: true, effectiveDate: true, generatedAt: true, generatedBy: { select: { fullName: true, username: true } } } as const;
 export function substituteVariables(template: string, vars: Record<string,string>) { return template.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => vars[key] || "___"); }
+export function normalizeResignationTemplateForPdf(value: string) { return normalizeTemplateText(value); }
+function templateVariables(template: string) { return new Set(Array.from(template.matchAll(/{{\s*([a-z_]+)\s*}}/gi), match => match[1])); }
+function cleanOverride(value?: string) { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function position(payload: unknown) { const p = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}; for (const key of ["position_name", "position", "job_title", "title", "designation"]) if (typeof p[key] === "string" && p[key]) return String(p[key]); return null; }
 function parseDate(value: string, message: string) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new BadRequestException(message); const d = new Date(`${value}T00:00:00.000Z`); if (Number.isNaN(d.getTime())) throw new BadRequestException(message); return d; }
 function isoDate(d: Date) { return d.toISOString().slice(0,10); } function formatDate(d: Date) { return new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC" }).format(d); }
+function formatArabicDate(d: Date) { const months = ["جانفي", "فيفري", "مارس", "أفريل", "ماي", "جوان", "جويلية", "أوت", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]; return `${String(d.getUTCDate()).padStart(2, "0")} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+function contractStart(contracts: Array<{ startDate: Date }>, effectiveDate: Date) { return contracts.find(contract => contract.startDate <= effectiveDate)?.startDate || contracts[0]?.startDate || null; }
+function normalizeTemplateText(value: string) {
+  return value
+    .replace(/&#x20;|&nbsp;/gi, " ")
+    .replace(/&#xA0;/gi, " ")
+    .replace(/\u00a0/g, " ")
+    .replace(/\*/g, "")
+    .replace(/^\s*\*\s*/gm, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+function renderDecisionLines(content: string) {
+  return content.split(/\r?\n/).map(raw => {
+    const line = raw.trim();
+    if (!line) return `<div class="decision-line blank"></div>`;
+    if (/^(المديري|مديري|رقم|قـ|قــــ|قرار الاستقالة)/.test(line)) return `<div class="doc-head-line">${esc(line)}</div>`;
+    if (/^يق/.test(line)) return `<div class="decision-line center">${esc(line)}</div>`;
+    if (/^نسخة/.test(line)) return `<div class="copies">${esc(line)}</div>`;
+    if (/^(المعن|ملف المعني)$/.test(line)) return `<div class="decision-line">${esc(line)}</div>`;
+    if (/^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(line)) return `<div class="signature">${esc(line)}</div>`;
+    if (/^-/.test(line)) return `<div class="decision-line recital">${esc(line)}</div>`;
+    const article = line.match(/^(المادة\s+\d+\s*:)(.*)$/);
+    if (article) return `<div class="decision-line article"><strong>${esc(article[1])}</strong>${esc(article[2])}</div>`;
+    return `<div class="decision-line">${esc(line)}</div>`;
+  }).join("");
+}
 function esc(v: unknown) { return String(v ?? "___").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]!)); }
 function chromePath() { const candidates = ["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"]; const found = candidates.find(existsSync); if (!found) throw new BadRequestException("Chrome ou Edge est requis sur le serveur pour générer le PDF."); return found; }
