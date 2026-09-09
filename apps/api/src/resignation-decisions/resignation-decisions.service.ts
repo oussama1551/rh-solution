@@ -41,6 +41,7 @@ export const DEFAULT_RESIGNATION_DECISION_TEMPLATE = `المديريــــــ
 
 type DecisionGenerateBody = { decisionDate?: string; effectiveDate?: string; requestDate?: string; regenerate?: boolean; overrides?: DecisionOverrides };
 type DecisionOverrides = { employeeName?: string; employeePosition?: string; contractDate?: string; requestDate?: string; effectiveDate?: string; gerantName?: string };
+type EmployeeCompanyFallback = { localMatricule: string | null; employeeCode: string; biotimeCode: string | null; sapDirectoryRecords: Array<{ sapCompany: string }> };
 
 @Injectable()
 export class ResignationDecisionsService {
@@ -152,8 +153,15 @@ export class ResignationDecisionsService {
         group: { include: { subUnit: { include: { unit: true } } } }
       }
     });
-    if (!employee || employee.status !== "RESIGNED") throw new BadRequestException("L'employé doit être démissionné."); const unit = employee.group?.subUnit.unit;
-    if (!unit) throw new BadRequestException("Société introuvable dans l'organigramme de l'employé."); return { employee, unit };
+    if (!employee || employee.status !== "RESIGNED") throw new BadRequestException("L'employé doit être démissionné.");
+    const unit = employee.group?.subUnit.unit || await this.fallbackUnit(employee);
+    if (!unit) throw new BadRequestException("Société introuvable dans l'organigramme de l'employé et aucun lien SAP exploitable.");
+    return { employee, unit };
+  }
+  private async fallbackUnit(employee: EmployeeCompanyFallback) {
+    const company = employee.sapDirectoryRecords[0]?.sapCompany || companyFromEmployeeCodes(employee);
+    if (!company) return null;
+    return this.prisma.unit.findFirst({ where: { OR: [{ code: { equals: company, mode: "insensitive" } }, { name: { equals: company, mode: "insensitive" } }] } });
   }
   private missing(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>) {
     const used = templateVariables(decisionTemplate(c.unit.resignationDecisionTemplate));
@@ -227,6 +235,13 @@ function rawArabicString(row: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = row[key];
     if (typeof value === "string" && /[\u0600-\u06FF]/.test(value) && value.trim()) return value.trim();
+  }
+  return null;
+}
+function companyFromEmployeeCodes(employee: EmployeeCompanyFallback) {
+  for (const value of [employee.localMatricule, employee.employeeCode, employee.biotimeCode]) {
+    const match = String(value || "").match(/^(FABCOM|RECYCLAGE|NEWTECH)(?:_DEV)?-/i);
+    if (match) return match[1].toUpperCase();
   }
   return null;
 }
