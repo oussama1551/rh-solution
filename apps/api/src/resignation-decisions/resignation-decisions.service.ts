@@ -12,7 +12,7 @@ import { PrismaService } from "../prisma/prisma.service";
 const STORAGE = resolve(process.cwd(), "storage", "resignation-decisions");
 const PROFILE_FIELDS = ["fullLegalName", "legalForm", "legalAddress", "capitalSocial", "rcNumber", "nifNumber", "artNumber", "legalPhones", "legalEmail", "legalWebsite", "gerantName", "gerantTitle", "resignationDecisionTemplate"] as const;
 export const AVAILABLE_VARIABLES = ["employee_name", "employee_position", "decision_number", "decision_number_ar", "decision_sequence", "decision_year", "decision_date", "contract_date", "request_date", "effective_date", "effective_date_ar", "company_legal_name", "gerant_name"];
-const DEFAULT_TEMPLATE = `المديريــــــــــــــة العامـــــــــــــــة
+export const DEFAULT_RESIGNATION_DECISION_TEMPLATE = `المديريــــــــــــــة العامـــــــــــــــة
 مديريـــــــــة الموارد البشريـــــــــة
 رقم {{decision_sequence}} / م ع/ م م ب/{{decision_year}}
 قـــــــرار الاستقالـــة
@@ -156,7 +156,7 @@ export class ResignationDecisionsService {
     if (!unit) throw new BadRequestException("Société introuvable dans l'organigramme de l'employé."); return { employee, unit };
   }
   private missing(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>) {
-    const used = templateVariables(c.unit.resignationDecisionTemplate || DEFAULT_TEMPLATE);
+    const used = templateVariables(decisionTemplate(c.unit.resignationDecisionTemplate));
     const missing: string[] = [];
     if (used.has("company_legal_name") && !c.unit.fullLegalName) missing.push("company_legal_name");
     if (used.has("gerant_name") && !c.unit.gerantName) missing.push("gerant_name");
@@ -182,7 +182,7 @@ export class ResignationDecisionsService {
       company_legal_name: c.unit.fullLegalName || c.unit.name || "___",
       gerant_name: cleanOverride(overrides?.gerantName) || c.unit.gerantName || "___"
     };
-    const template = normalizeTemplateText(c.unit.resignationDecisionTemplate || DEFAULT_TEMPLATE);
+    const template = normalizeTemplateText(decisionTemplate(c.unit.resignationDecisionTemplate));
     return {
       vars,
       content: substituteVariables(template, vars),
@@ -205,7 +205,15 @@ const unitSelect = { id: true, name: true, code: true, legalLogoPath: true, full
 const decisionSelect = { id: true, decisionNumber: true, decisionDate: true, effectiveDate: true, generatedAt: true, generatedBy: { select: { fullName: true, username: true } } } as const;
 export function substituteVariables(template: string, vars: Record<string,string>) { return template.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => vars[key] || "___"); }
 export function normalizeResignationTemplateForPdf(value: string) { return normalizeTemplateText(value); }
+export function selectResignationDecisionTemplate(value?: string | null) { return decisionTemplate(value); }
 function templateVariables(template: string) { return new Set(Array.from(template.matchAll(/{{\s*([a-z_]+)\s*}}/gi), match => match[1])); }
+function decisionTemplate(saved?: string | null) {
+  const normalized = normalizeTemplateText(saved || "");
+  const variables = templateVariables(normalized);
+  const hasWorkerVariables = variables.has("employee_name") && variables.has("employee_position");
+  const hasDateVariables = variables.has("contract_date") && variables.has("request_date") && (variables.has("effective_date") || variables.has("effective_date_ar"));
+  return hasWorkerVariables && hasDateVariables ? normalized : DEFAULT_RESIGNATION_DECISION_TEMPLATE;
+}
 function cleanOverride(value?: string) { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function sapArabicName(payload: unknown) {
   const row = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};

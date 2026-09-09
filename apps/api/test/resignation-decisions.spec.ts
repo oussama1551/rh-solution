@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { normalizeResignationTemplateForPdf, substituteVariables } from "../src/resignation-decisions/resignation-decisions.service";
+import { normalizeResignationTemplateForPdf, selectResignationDecisionTemplate, substituteVariables } from "../src/resignation-decisions/resignation-decisions.service";
 
 describe("resignation decisions", () => {
   it("substitue les variables et rend les valeurs absentes visibles", () => {
@@ -23,5 +23,12 @@ describe("resignation decisions", () => {
   it("nettoie les marqueurs Markdown collés dans le modèle arabe", () => {
     expect(normalizeResignationTemplateForPdf("***المادة 01****: نص&#xA0;تجريبي"))
       .toBe("المادة 01: نص تجريبي");
+  });
+
+  it("ignore un modèle figé sans variables employé et dates", () => {
+    const template = selectResignationDecisionTemplate("المادة 01: يوافق على استقالة السيد بومالي وائل من منصب مهندس في الصيانة.");
+    expect(template).toContain("{{employee_name}}");
+    expect(template).toContain("{{request_date}}");
+    expect(template).toContain("{{effective_date_ar}}");
   });
 });
