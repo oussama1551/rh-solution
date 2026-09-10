@@ -105,7 +105,8 @@ export class ResignationDecisionsService {
     const effectiveDate = context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate || decisionDate;
     const sap = context.employee.sapDirectoryRecords[0] || null;
     const sapNameAr = sapArabicName(sap?.rawPayload);
-    const contractDate = contractStart(context.employee.contracts, effectiveDate) || sap?.hireDate || context.employee.hireDate || decisionDate;
+    const sapContract = sapContractDate(sap);
+    const contractDate = sapContract || contractStart(context.employee.contracts, effectiveDate) || context.employee.hireDate || decisionDate;
     const hireDate = sap?.hireDate || context.employee.hireDate || contractDate;
     const biotimePosition = position(context.employee.sourcePayload);
     const employeeNumber = displayEmployeeNumber(context.employee, sap);
@@ -151,7 +152,7 @@ export class ResignationDecisionsService {
         newPosition: "Manuel",
         grade: "Manuel",
         category: "Manuel",
-        contractDate: context.employee.contracts.length ? "Contrats RH" : sap?.hireDate ? "SAP" : context.employee.hireDate ? "BioTime" : "Manuel",
+        contractDate: sapContract ? "SAP" : context.employee.contracts.length ? "Contrats RH" : context.employee.hireDate ? "BioTime" : "Manuel",
         effectiveDate: context.employee.resignedAt || context.employee.resignRecords[0]?.resignDate ? "BioTime démission" : "Manuel",
         gerantName: context.unit.gerantName ? "Paramétrage société" : "Manuel"
       },
@@ -215,9 +216,9 @@ export class ResignationDecisionsService {
     return missing;
   }
   private async snapshot(c: Awaited<ReturnType<ResignationDecisionsService["context"]>>, decisionType: DecisionType, number: string, sequence: number, decisionDate: Date, effectiveDate: Date, requestDate: Date, overrides?: DecisionOverrides) {
-    const contractDate = overrides?.contractDate ? parseDate(overrides.contractDate, "Date de contrat invalide.") : (contractStart(c.employee.contracts, effectiveDate) || c.employee.sapDirectoryRecords[0]?.hireDate || c.employee.hireDate || requestDate);
-    const hireDate = overrides?.hireDate ? parseDate(overrides.hireDate, "Date de recrutement invalide.") : (c.employee.sapDirectoryRecords[0]?.hireDate || c.employee.hireDate || contractDate);
     const sap = c.employee.sapDirectoryRecords[0] || null;
+    const contractDate = overrides?.contractDate ? parseDate(overrides.contractDate, "Date de contrat invalide.") : (sapContractDate(sap) || contractStart(c.employee.contracts, effectiveDate) || c.employee.hireDate || requestDate);
+    const hireDate = overrides?.hireDate ? parseDate(overrides.hireDate, "Date de recrutement invalide.") : (c.employee.sapDirectoryRecords[0]?.hireDate || c.employee.hireDate || contractDate);
     const employeePosition = cleanOverride(overrides?.employeePosition) || sap?.poste || position(c.employee.sourcePayload) || "___";
     const vars: Record<string,string> = {
       employee_name: cleanOverride(overrides?.employeeName) || sapArabicName(sap?.rawPayload) || sap?.fullName || c.employee.fullName || "___",
@@ -298,6 +299,19 @@ function rawArabicString(row: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = row[key];
     if (typeof value === "string" && /[\u0600-\u06FF]/.test(value) && value.trim()) return value.trim();
+  }
+  return null;
+}
+function sapContractDate(sap?: { hireDate: Date | null; rawPayload?: Prisma.JsonValue | null } | null) {
+  const row = sap?.rawPayload && typeof sap.rawPayload === "object" && !Array.isArray(sap.rawPayload) ? sap.rawPayload as Record<string, unknown> : {};
+  return rawDate(row, ["Date_Entrer", "startDate", "hireDate", "dateContrat", "contractDate", "DateContrat", "U_CMC_DateContrat"]) || sap?.hireDate || null;
+}
+function rawDate(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (!value) continue;
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (!Number.isNaN(date.getTime())) return date;
   }
   return null;
 }
