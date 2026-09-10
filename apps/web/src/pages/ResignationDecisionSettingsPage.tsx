@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, Bold, Heading1, List, Pilcrow, RotateCcw, Save, Signature, TextCursorInput, Upload } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Heading1, List, Pilcrow, RotateCcw, Save, Signature, TextCursorInput, Undo2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { PageHeader } from "../components/PageHeader";
@@ -60,6 +60,7 @@ export function ResignationDecisionSettingsPage() {
   const { user } = useAuth(); const units = useApi<LegalUnit[]>("/api/resignation-decisions/units", []); const [selectedId,setSelectedId]=useState(""); const [form,setForm]=useState<LegalUnit|null>(null); const [message,setMessage]=useState("");
   const [templateType,setTemplateType]=useState<"RESIGNATION"|"POSITION_CHANGE">("RESIGNATION");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const historyRef = useRef<string[]>([]);
   useEffect(()=>{ const selected=units.data.find(x=>x.id===(selectedId||units.data[0]?.id)); if(selected){setSelectedId(selected.id);setForm({...selected});}},[units.data,selectedId]);
   if (!user?.roles.includes("ADMIN")) return <div className="alert alert-error">Accès réservé à Admin.</div>;
   const templateKey = templateType === "POSITION_CHANGE" ? "positionChangeDecisionTemplate" : "resignationDecisionTemplate";
@@ -67,7 +68,17 @@ export function ResignationDecisionSettingsPage() {
   const officialTemplate = templateType === "POSITION_CHANGE" ? officialPositionChangeTemplate : officialResignationTemplate;
   const requiredTokens = templateType === "POSITION_CHANGE" ? ["{{employee_name}}", "{{employee_position}}", "{{new_position}}", "{{hire_date}}", "{{effective_date}}"] : ["{{employee_name}}", "{{employee_position}}", "{{contract_date}}", "{{request_date}}"];
   const templateNeedsVariables = form ? !requiredTokens.every(token => activeTemplate.includes(token)) : false;
-  function updateTemplate(value: string) { if (form) setForm({ ...form, [templateKey]: value }); }
+  function updateTemplate(value: string, recordHistory = true) {
+    if (!form) return;
+    if (recordHistory && value !== activeTemplate) historyRef.current = [...historyRef.current.slice(-30), activeTemplate];
+    setForm({ ...form, [templateKey]: value });
+  }
+  function undoTemplate() {
+    const previous = historyRef.current.pop();
+    if (previous === undefined) return;
+    updateTemplate(previous, false);
+    window.requestAnimationFrame(() => editorRef.current?.focus());
+  }
   function insertText(value: string) {
     const textarea = editorRef.current;
     if (!textarea) return updateTemplate(`${activeTemplate}${value}`);
@@ -95,7 +106,30 @@ export function ResignationDecisionSettingsPage() {
   }
   function applyFontSize(size: string) {
     if (!size) return;
-    wrapText(`[[size:${size}]]`, "[[/size]]", "نص");
+    const textarea = editorRef.current;
+    if (!textarea) return wrapText(`[[size:${size}]]`, "[[/size]]", "نص");
+    let start = textarea.selectionStart ?? activeTemplate.length;
+    let end = textarea.selectionEnd ?? start;
+    if (start === end) return wrapText(`[[size:${size}]]`, "[[/size]]", "نص");
+    let before = activeTemplate.slice(0, start);
+    let after = activeTemplate.slice(end);
+    let opening = before.match(/\[\[size:\d{1,2}\]\]$/);
+    while (opening && after.startsWith("[[/size]]")) {
+      start -= opening[0].length;
+      end += "[[/size]]".length;
+      before = activeTemplate.slice(0, start);
+      after = activeTemplate.slice(end);
+      opening = before.match(/\[\[size:\d{1,2}\]\]$/);
+    }
+    const raw = activeTemplate.slice(start, end)
+      .replace(/\[\[size:\d{1,2}\]\]/g, "")
+      .replace(/\[\[\/size\]\]/g, "");
+    const next = `${activeTemplate.slice(0, start)}[[size:${size}]]${raw}[[/size]]${activeTemplate.slice(end)}`;
+    updateTemplate(next);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + `[[size:${size}]]`.length, start + `[[size:${size}]]`.length + raw.length);
+    });
   }
   function alignCurrentLine(direction: "right" | "center" | "left") {
     const textarea = editorRef.current;
@@ -123,6 +157,7 @@ export function ResignationDecisionSettingsPage() {
       {templateNeedsVariables&&<div className="alert alert-warning">Ce modèle contient probablement des valeurs fixes. Utilisez le modèle officiel pour que nom, poste et dates changent selon l'employé.</div>}
       <div className="decision-word-editor">
         <div className="decision-editor-toolbar">
+          <button type="button" onClick={undoTemplate}><Undo2 size={14}/> Retour</button>
           <button type="button" onClick={()=>wrapText("**", "**", "نص مهم")}><Bold size={14}/> Gras</button>
           <button type="button" onClick={()=>wrapText("[[small]]", "[[/small]]", "نص صغير")}><TextCursorInput size={14}/> Petit</button>
           <button type="button" onClick={()=>wrapText("[[large]]", "[[/large]]", "نص كبير")}><TextCursorInput size={14}/> Grand</button>
