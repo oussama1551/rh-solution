@@ -189,8 +189,17 @@ function PreviewLine({ line }: { line: string }) {
   let text = line.trim();
   const align = text.match(/^::(center|left|right)::\s*(.*)$/);
   if (align) text = align[2];
-  const className = `${!text ? "blank" : /^-/.test(text) ? "recital" : /^يق/.test(text) ? "center" : /^(المديري|مديري|رقم|قـ|قــــ)/.test(text) ? "head" : /^المادة\s+\d+\s*:/.test(text) ? "article" : /^(مسير الشركة|{{gerant_name}})/.test(text) ? "signature" : ""} ${align ? `align-${align[1]}` : ""}`;
+  const semantic = stripInlineMarkers(text);
+  const className = `${!text ? "blank" : /^-/.test(semantic) ? "recital" : /^يق/.test(semantic) ? "center" : /^(المديري|مديري|رقم|قـ|قــــ|قرار الاستقالة)/.test(semantic) ? "head" : /^المادة\s+\d+\s*:/.test(semantic) ? "article" : /^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(semantic) ? "signature" : ""} ${align ? `align-${align[1]}` : ""}`;
   return <p className={className}>{renderInline(text)}</p>;
+}
+
+function stripInlineMarkers(value: string) {
+  return value
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\[\[(?:small|large|ltr|rtl)\]\](.+?)\[\[\/(?:small|large|ltr|rtl)\]\]/g, "$1")
+    .replace(/\[\[size:\d{1,2}\]\](.+?)\[\[\/size\]\]/g, "$1")
+    .trim();
 }
 
 function renderInline(value: string) {
