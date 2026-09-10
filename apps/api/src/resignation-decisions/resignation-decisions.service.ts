@@ -318,7 +318,7 @@ function normalizeTemplateText(value: string) {
     .replace(/&#x20;|&nbsp;/gi, " ")
     .replace(/&#xA0;/gi, " ")
     .replace(/\u00a0/g, " ")
-    .replace(/\*/g, "")
+    .replace(/\*{3,}/g, "")
     .replace(/^\s*\*\s*/gm, "")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
@@ -327,16 +327,17 @@ function renderDecisionLines(content: string) {
   return content.split(/\r?\n/).map(raw => {
     const line = raw.trim();
     if (!line) return `<div class="decision-line blank"></div>`;
-    if (/^(المديري|مديري|رقم|قـ|قــــ|قرار الاستقالة)/.test(line)) return `<div class="doc-head-line">${esc(line)}</div>`;
-    if (/^يق/.test(line)) return `<div class="decision-line center">${esc(line)}</div>`;
-    if (/^نسخة/.test(line)) return `<div class="copies">${esc(line)}</div>`;
-    if (/^(المعن|ملف المعني)$/.test(line)) return `<div class="decision-line">${esc(line)}</div>`;
-    if (/^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(line)) return `<div class="signature">${esc(line)}</div>`;
-    if (/^-/.test(line)) return `<div class="decision-line recital">${esc(line)}</div>`;
+    if (/^(المديري|مديري|رقم|قـ|قــــ|قرار الاستقالة)/.test(line)) return `<div class="doc-head-line">${rich(line)}</div>`;
+    if (/^يق/.test(line)) return `<div class="decision-line center">${rich(line)}</div>`;
+    if (/^نسخة/.test(line)) return `<div class="copies">${rich(line)}</div>`;
+    if (/^(المعن|ملف المعني)$/.test(line)) return `<div class="decision-line">${rich(line)}</div>`;
+    if (/^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(line)) return `<div class="signature">${rich(line)}</div>`;
+    if (/^-/.test(line)) return `<div class="decision-line recital">${rich(line)}</div>`;
     const article = line.match(/^(المادة\s+\d+\s*:)(.*)$/);
-    if (article) return `<div class="decision-line article"><strong>${esc(article[1])}</strong>${esc(article[2])}</div>`;
-    return `<div class="decision-line">${esc(line)}</div>`;
+    if (article) return `<div class="decision-line article"><strong>${esc(article[1])}</strong>${rich(article[2])}</div>`;
+    return `<div class="decision-line">${rich(line)}</div>`;
   }).join("");
 }
+function rich(v: unknown) { return esc(v).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"); }
 function esc(v: unknown) { return String(v ?? "___").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]!)); }
 function chromePath() { const candidates = ["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"]; const found = candidates.find(existsSync); if (!found) throw new BadRequestException("Chrome ou Edge est requis sur le serveur pour générer le PDF."); return found; }

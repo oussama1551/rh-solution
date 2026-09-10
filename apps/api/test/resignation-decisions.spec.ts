@@ -31,6 +31,11 @@ describe("resignation decisions", () => {
       .toBe("المادة 01: نص تجريبي");
   });
 
+  it("conserve le gras volontaire dans le modèle", () => {
+    expect(normalizeResignationTemplateForPdf("المادة 01: **نص مهم**"))
+      .toBe("المادة 01: **نص مهم**");
+  });
+
   it("ignore un modèle figé sans variables employé et dates", () => {
     const template = selectResignationDecisionTemplate("المادة 01: يوافق على استقالة السيد بومالي وائل من منصب مهندس في الصيانة.");
     expect(template).toContain("{{employee_name}}");

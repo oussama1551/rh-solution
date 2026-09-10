@@ -1,5 +1,5 @@
-import { RotateCcw, Save, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bold, Heading1, List, Pilcrow, RotateCcw, Save, Signature, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../lib/api";
@@ -59,6 +59,7 @@ const officialPositionChangeTemplate = `المديريـــــــــــــ
 export function ResignationDecisionSettingsPage() {
   const { user } = useAuth(); const units = useApi<LegalUnit[]>("/api/resignation-decisions/units", []); const [selectedId,setSelectedId]=useState(""); const [form,setForm]=useState<LegalUnit|null>(null); const [message,setMessage]=useState("");
   const [templateType,setTemplateType]=useState<"RESIGNATION"|"POSITION_CHANGE">("RESIGNATION");
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(()=>{ const selected=units.data.find(x=>x.id===(selectedId||units.data[0]?.id)); if(selected){setSelectedId(selected.id);setForm({...selected});}},[units.data,selectedId]);
   if (!user?.roles.includes("ADMIN")) return <div className="alert alert-error">Accès réservé à Admin.</div>;
   const templateKey = templateType === "POSITION_CHANGE" ? "positionChangeDecisionTemplate" : "resignationDecisionTemplate";
@@ -66,6 +67,32 @@ export function ResignationDecisionSettingsPage() {
   const officialTemplate = templateType === "POSITION_CHANGE" ? officialPositionChangeTemplate : officialResignationTemplate;
   const requiredTokens = templateType === "POSITION_CHANGE" ? ["{{employee_name}}", "{{employee_position}}", "{{new_position}}", "{{hire_date}}", "{{effective_date}}"] : ["{{employee_name}}", "{{employee_position}}", "{{contract_date}}", "{{request_date}}"];
   const templateNeedsVariables = form ? !requiredTokens.every(token => activeTemplate.includes(token)) : false;
+  function updateTemplate(value: string) { if (form) setForm({ ...form, [templateKey]: value }); }
+  function insertText(value: string) {
+    const textarea = editorRef.current;
+    if (!textarea) return updateTemplate(`${activeTemplate}${value}`);
+    const start = textarea.selectionStart ?? activeTemplate.length;
+    const end = textarea.selectionEnd ?? start;
+    const next = `${activeTemplate.slice(0, start)}${value}${activeTemplate.slice(end)}`;
+    updateTemplate(next);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + value.length, start + value.length);
+    });
+  }
+  function wrapText(prefix: string, suffix = prefix, placeholder = "النص") {
+    const textarea = editorRef.current;
+    if (!textarea) return insertText(`${prefix}${placeholder}${suffix}`);
+    const start = textarea.selectionStart ?? activeTemplate.length;
+    const end = textarea.selectionEnd ?? start;
+    const selected = activeTemplate.slice(start, end) || placeholder;
+    const next = `${activeTemplate.slice(0, start)}${prefix}${selected}${suffix}${activeTemplate.slice(end)}`;
+    updateTemplate(next);
+    window.requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    });
+  }
   async function save(){ if(!form)return; await api(`/api/resignation-decisions/units/${form.id}`,{method:"PATCH",body:JSON.stringify(form)}); setMessage("Profil juridique et modèle enregistrés."); await units.reload(); }
   async function logo(file?:File){if(!file||!form)return;const body=new FormData();body.append("logo",file);await api(`/api/resignation-decisions/units/${form.id}/logo`,{method:"POST",body});setMessage("Logo enregistré.");await units.reload();}
   return <><PageHeader title="Décisions RH — sociétés"/><section className="panel resignation-settings">
@@ -74,8 +101,38 @@ export function ResignationDecisionSettingsPage() {
     {form&&<><div className="legal-profile-grid logo-only-profile"><div className="logo-editor"><div className="logo-preview">{form.legalLogoPath?<img src={`/api/resignation-decisions/units/${form.id}/logo`} alt="Logo"/>:<span>Aucun logo</span>}</div><label className="btn btn-secondary"><Upload size={15}/> Charger logo PNG/JPG<input hidden type="file" accept="image/png,image/jpeg" onChange={e=>logo(e.target.files?.[0])}/></label></div><div className="form-grid">{fields.map(([key,label])=><label key={key as string}><span>{label}</span><input value={String(form[key]||"")} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}</div></div>
       <div className="template-heading"><strong>Modèle arabe entièrement modifiable</strong><div className="row-actions"><div className="segmented-control"><button type="button" className={templateType==="RESIGNATION"?"active":""} onClick={()=>setTemplateType("RESIGNATION")}>Démission</button><button type="button" className={templateType==="POSITION_CHANGE"?"active":""} onClick={()=>setTemplateType("POSITION_CHANGE")}>Changement de poste</button></div><Button type="button" variant="secondary" onClick={()=>setForm({...form,[templateKey]:officialTemplate})}><RotateCcw size={14}/> Modèle officiel avec variables</Button></div></div>
       {templateNeedsVariables&&<div className="alert alert-warning">Ce modèle contient probablement des valeurs fixes. Utilisez le modèle officiel pour que nom, poste et dates changent selon l'employé.</div>}
-      <label className="template-editor"><textarea dir="rtl" rows={15} value={activeTemplate} onChange={e=>setForm({...form,[templateKey]:e.target.value})}/></label>
-      <div className="variable-help"><strong>Variables disponibles :</strong>{variables.map(v=><button type="button" key={v} onClick={()=>setForm({...form,[templateKey]:`${activeTemplate}${v}`})}>{v}</button>)}</div>
+      <div className="decision-word-editor">
+        <div className="decision-editor-toolbar">
+          <button type="button" onClick={()=>wrapText("**", "**", "نص مهم")}><Bold size={14}/> Gras</button>
+          <button type="button" onClick={()=>insertText("\nقـــــــرار\n")}><Heading1 size={14}/> Titre</button>
+          <button type="button" onClick={()=>insertText("\n- ")}><List size={14}/> Puce</button>
+          <button type="button" onClick={()=>insertText("\nالمادة 01: ")}><Pilcrow size={14}/> Article</button>
+          <button type="button" onClick={()=>insertText("\n\nمسير الشركة\n{{gerant_name}}")}><Signature size={14}/> Signature</button>
+        </div>
+        <div className="decision-editor-grid">
+          <label className="template-editor"><span>Texte du modèle</span><textarea ref={editorRef} dir="rtl" rows={20} value={activeTemplate} onChange={e=>updateTemplate(e.target.value)}/></label>
+          <div className="decision-template-preview" dir="rtl">
+            <span>Aperçu rapide</span>
+            <div>{activeTemplate.split(/\r?\n/).map((line,index)=><PreviewLine key={`${index}-${line}`} line={line}/>)}</div>
+          </div>
+        </div>
+      </div>
+      <div className="variable-help"><strong>Variables disponibles :</strong>{variables.map(v=><button type="button" key={v} onClick={()=>insertText(v)}>{v}</button>)}</div>
       <Button onClick={save}><Save size={15}/> Enregistrer</Button></>}
   </section></>;
+}
+
+function PreviewLine({ line }: { line: string }) {
+  const text = line.trim();
+  const className = !text ? "blank" : /^-/.test(text) ? "recital" : /^يق/.test(text) ? "center" : /^(المديري|مديري|رقم|قـ|قــــ)/.test(text) ? "head" : /^المادة\s+\d+\s*:/.test(text) ? "article" : /^(مسير الشركة|{{gerant_name}})/.test(text) ? "signature" : "";
+  return <p className={className}>{renderInline(text)}</p>;
+}
+
+function renderInline(value: string) {
+  const parts = value.split(/(\{\{[^}]+\}\}|\*\*[^*]+\*\*)/g).filter(Boolean);
+  return parts.map((part, index) => {
+    if (/^\{\{[^}]+\}\}$/.test(part)) return <code key={index}>{part}</code>;
+    if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    return <span key={index}>{part}</span>;
+  });
 }
