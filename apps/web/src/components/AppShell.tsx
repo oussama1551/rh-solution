@@ -26,32 +26,44 @@ import { useApi } from "../lib/useApi";
 import { NotificationsBell } from "./NotificationsBell";
 import { StatusBadge } from "./StatusBadge";
 
-const navItems: Array<{ label: string; to: string; icon: typeof LayoutDashboard; permission: Permission; roles?: string[] }> = [
-  { label: "Tableau de bord", to: "/", icon: LayoutDashboard, permission: "reports.read" },
-  { label: "Temps réel", to: "/realtime", icon: Activity, permission: "attendance.read" },
-  { label: "Absences", to: "/absences", icon: CalendarX, permission: "reports.read" },
-  { label: "Absences non confirmées", to: "/presumed-absences", icon: CalendarX, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH"] },
-  { label: "Déclaration absences", to: "/manual-absences", icon: CalendarPlus, permission: "attendance.read", roles: ["ADMIN", "DRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
-  { label: "Employés", to: "/employees", icon: Users, permission: "employees.read" },
-  { label: "Démissionnés", to: "/employees/resigned", icon: Users, permission: "employees.read", roles: ["ADMIN", "DRH", "GRH"] },
-  { label: "Heures sup.", to: "/overtime", icon: Clock, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
-  { label: "Maladie", to: "/sick-leaves", icon: CalendarPlus, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH"] },
-  { label: "Congé", to: "/leaves", icon: CalendarDays, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
-  { label: "Validation RH", to: "/validation", icon: ClipboardCheck, permission: "attendance.manage" },
-  { label: "Messages", to: "/messages", icon: MessageSquare, permission: "reports.read" },
-  { label: "Organigramme", to: "/org", icon: Network, permission: "org.read" },
-  { label: "Terminaux", to: "/devices", icon: Monitor, permission: "devices.read" },
-  { label: "Rapports", to: "/reports", icon: BarChart3, permission: "reports.read" },
-  { label: "Synthèse paie", to: "/reports/summary", icon: BarChart3, permission: "reports.read" },
-  { label: "Synthèse heures sup.", to: "/reports/overtime-summary", icon: Clock, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"] },
-  { label: "Traitement avance", to: "/advanced-treatment", icon: ClipboardCheck, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH"] },
-  { label: "Contrôle paie", to: "/admin/payroll-control", icon: ShieldCheck, permission: "payroll.control" },
-  { label: "Synchronisation", to: "/admin/sync", icon: RefreshCw, permission: "sync.run" },
-  { label: "Annuaire SAP", to: "/admin/sap-directory", icon: Users, permission: "employees.manage" },
-  { label: "Fiches de poste", to: "/job-descriptions", icon: BookOpenText, permission: "job_description.view" },
-  { label: "Administration", to: "/admin/users", icon: Settings, permission: "administration.read" }
-  ,{ label: "Tous les logs", to: "/admin/logs", icon: ScrollText, permission: "audit.read", roles: ["ADMIN"] }
-  ,{ label: "Décisions RH", to: "/admin/resignation-decisions", icon: ScrollText, permission: "administration.read", roles: ["ADMIN"] }
+type NavGroup = "pilotage" | "presence" | "employees" | "payroll" | "reference" | "system";
+type NavItem = { label: string; to: string; icon: typeof LayoutDashboard; permission: Permission; roles?: string[]; group: NavGroup };
+
+const navGroups: Array<{ key: NavGroup; label: string; icon: typeof LayoutDashboard }> = [
+  { key: "pilotage", label: "Pilotage", icon: LayoutDashboard },
+  { key: "presence", label: "Présence", icon: CalendarDays },
+  { key: "employees", label: "Employés", icon: Users },
+  { key: "payroll", label: "Paie & contrôle", icon: ShieldCheck },
+  { key: "reference", label: "Référentiels RH", icon: BookOpenText },
+  { key: "system", label: "Administration système", icon: Settings }
+];
+
+const navItems: NavItem[] = [
+  { label: "Tableau de bord", to: "/", icon: LayoutDashboard, permission: "reports.read", group: "pilotage" },
+  { label: "Temps réel", to: "/realtime", icon: Activity, permission: "attendance.read", group: "pilotage" },
+  { label: "Messages", to: "/messages", icon: MessageSquare, permission: "reports.read", group: "pilotage" },
+  { label: "Absences", to: "/absences", icon: CalendarX, permission: "reports.read", group: "presence" },
+  { label: "Absences non confirmées", to: "/presumed-absences", icon: CalendarX, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH"], group: "presence" },
+  { label: "Déclaration absences", to: "/manual-absences", icon: CalendarPlus, permission: "attendance.read", roles: ["ADMIN", "DRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"], group: "presence" },
+  { label: "Heures sup.", to: "/overtime", icon: Clock, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"], group: "presence" },
+  { label: "Maladie", to: "/sick-leaves", icon: CalendarPlus, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH"], group: "presence" },
+  { label: "Congé", to: "/leaves", icon: CalendarDays, permission: "attendance.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"], group: "presence" },
+  { label: "Validation RH", to: "/validation", icon: ClipboardCheck, permission: "attendance.manage", group: "presence" },
+  { label: "Employés", to: "/employees", icon: Users, permission: "employees.read", group: "employees" },
+  { label: "Démissionnés", to: "/employees/resigned", icon: Users, permission: "employees.read", roles: ["ADMIN", "DRH", "GRH"], group: "employees" },
+  { label: "Organigramme", to: "/org", icon: Network, permission: "org.read", group: "employees" },
+  { label: "Fiches de poste", to: "/job-descriptions", icon: BookOpenText, permission: "job_description.view", group: "employees" },
+  { label: "Rapports", to: "/reports", icon: BarChart3, permission: "reports.read", group: "payroll" },
+  { label: "Synthèse paie", to: "/reports/summary", icon: BarChart3, permission: "reports.read", group: "payroll" },
+  { label: "Synthèse heures sup.", to: "/reports/overtime-summary", icon: Clock, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH", "RESPONSABLE_DEPARTEMENT", "SUPERVISOR"], group: "payroll" },
+  { label: "Traitement avance", to: "/advanced-treatment", icon: ClipboardCheck, permission: "reports.read", roles: ["ADMIN", "DRH", "GRH"], group: "payroll" },
+  { label: "Contrôle paie", to: "/admin/payroll-control", icon: ShieldCheck, permission: "payroll.control", group: "payroll" },
+  { label: "Annuaire SAP", to: "/admin/sap-directory", icon: Users, permission: "employees.manage", group: "reference" },
+  { label: "Décisions RH", to: "/admin/resignation-decisions", icon: ScrollText, permission: "administration.read", roles: ["ADMIN"], group: "reference" },
+  { label: "Tous les logs", to: "/admin/logs", icon: ScrollText, permission: "audit.read", roles: ["ADMIN"], group: "system" },
+  { label: "Synchronisation", to: "/admin/sync", icon: RefreshCw, permission: "sync.run", group: "system" },
+  { label: "Terminaux", to: "/devices", icon: Monitor, permission: "devices.read", group: "system" },
+  { label: "Administration", to: "/admin/users", icon: Settings, permission: "administration.read", group: "system" }
 ];
 
 export function AppShell() {
@@ -92,14 +104,15 @@ export function AppShell() {
           <small>Dernière synchro: {syncAge}. L'application utilise la base locale.</small>
         </div>
         <nav>
-          {visibleNav.map(item => {
-            const Icon = item.icon;
+          {navGroups.map(group => {
+            const items = visibleNav.filter(item => item.group === group.key);
+            if (!items.length) return null;
+            const GroupIcon = group.icon;
             return (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
-                <Icon size={17} />
-                <span>{item.label}</span>
-                {navBadge(item.to, counts.data) > 0 && <span className="nav-badge">{navBadge(item.to, counts.data)}</span>}
-              </NavLink>
+              <div className="nav-group" key={group.key}>
+                <div className="nav-group-title"><GroupIcon size={14} /><span>{group.label}</span></div>
+                {items.map(item => <SidebarLink key={item.to} item={item} counts={counts.data} />)}
+              </div>
             );
           })}
         </nav>
@@ -137,6 +150,18 @@ export function AppShell() {
         </section>
       </main>
     </div>
+  );
+}
+
+function SidebarLink({ item, counts }: { item: NavItem; counts: NotificationMenuCounts }) {
+  const Icon = item.icon;
+  const badge = navBadge(item.to, counts);
+  return (
+    <NavLink to={item.to} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+      <Icon size={17} />
+      <span>{item.label}</span>
+      {badge > 0 && <span className="nav-badge">{badge}</span>}
+    </NavLink>
   );
 }
 
