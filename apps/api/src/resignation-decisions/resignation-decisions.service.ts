@@ -346,6 +346,7 @@ function rich(v: unknown) {
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\[\[small\]\](.+?)\[\[\/small\]\]/g, '<span class="text-small">$1</span>')
     .replace(/\[\[large\]\](.+?)\[\[\/large\]\]/g, '<span class="text-large">$1</span>')
+    .replace(/\[\[size:(\d{1,2})\]\](.+?)\[\[\/size\]\]/g, (_, size, text) => `<span style="font-size:${Math.min(28, Math.max(8, Number(size)))}px">${text}</span>`)
     .replace(/\[\[ltr\]\](.+?)\[\[\/ltr\]\]/g, '<span class="text-ltr" dir="ltr">$1</span>')
     .replace(/\[\[rtl\]\](.+?)\[\[\/rtl\]\]/g, '<span class="text-rtl" dir="rtl">$1</span>');
 }

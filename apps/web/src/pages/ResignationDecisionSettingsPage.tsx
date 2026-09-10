@@ -93,6 +93,10 @@ export function ResignationDecisionSettingsPage() {
       textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
     });
   }
+  function applyFontSize(size: string) {
+    if (!size) return;
+    wrapText(`[[size:${size}]]`, "[[/size]]", "نص");
+  }
   function alignCurrentLine(direction: "right" | "center" | "left") {
     const textarea = editorRef.current;
     const cursor = textarea?.selectionStart ?? activeTemplate.length;
@@ -122,6 +126,7 @@ export function ResignationDecisionSettingsPage() {
           <button type="button" onClick={()=>wrapText("**", "**", "نص مهم")}><Bold size={14}/> Gras</button>
           <button type="button" onClick={()=>wrapText("[[small]]", "[[/small]]", "نص صغير")}><TextCursorInput size={14}/> Petit</button>
           <button type="button" onClick={()=>wrapText("[[large]]", "[[/large]]", "نص كبير")}><TextCursorInput size={14}/> Grand</button>
+          <label className="decision-size-picker"><span>Taille</span><select defaultValue="" onChange={event=>{applyFontSize(event.target.value);event.target.value="";}}><option value="" disabled>Choisir</option><option value="11">11</option><option value="12">12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option><option value="24">24</option><option value="28">28</option></select></label>
           <button type="button" onClick={()=>alignCurrentLine("right")}><AlignRight size={14}/> Droite</button>
           <button type="button" onClick={()=>alignCurrentLine("center")}><AlignCenter size={14}/> Centre</button>
           <button type="button" onClick={()=>alignCurrentLine("left")}><AlignLeft size={14}/> Gauche</button>
@@ -154,12 +159,14 @@ function PreviewLine({ line }: { line: string }) {
 }
 
 function renderInline(value: string) {
-  const parts = value.split(/(\{\{[^}]+\}\}|\*\*[^*]+\*\*|\[\[(?:small|large|ltr|rtl)\]\].+?\[\[\/(?:small|large|ltr|rtl)\]\])/g).filter(Boolean);
+  const parts = value.split(/(\{\{[^}]+\}\}|\*\*[^*]+\*\*|\[\[(?:small|large|ltr|rtl)\]\].+?\[\[\/(?:small|large|ltr|rtl)\]\]|\[\[size:\d{1,2}\]\].+?\[\[\/size\]\])/g).filter(Boolean);
   return parts.map((part, index) => {
     if (/^\{\{[^}]+\}\}$/.test(part)) return <code key={index}>{part}</code>;
     if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={index}>{part.slice(2, -2)}</strong>;
     if (/^\[\[small\]\].+\[\[\/small\]\]$/.test(part)) return <span className="text-small" key={index}>{part.replace(/^\[\[small\]\]|\[\[\/small\]\]$/g, "")}</span>;
     if (/^\[\[large\]\].+\[\[\/large\]\]$/.test(part)) return <span className="text-large" key={index}>{part.replace(/^\[\[large\]\]|\[\[\/large\]\]$/g, "")}</span>;
+    const sized = part.match(/^\[\[size:(\d{1,2})\]\](.+)\[\[\/size\]\]$/);
+    if (sized) return <span style={{ fontSize: `${Math.min(28, Math.max(8, Number(sized[1])))}px` }} key={index}>{sized[2]}</span>;
     if (/^\[\[ltr\]\].+\[\[\/ltr\]\]$/.test(part)) return <span className="text-ltr" dir="ltr" key={index}>{part.replace(/^\[\[ltr\]\]|\[\[\/ltr\]\]$/g, "")}</span>;
     if (/^\[\[rtl\]\].+\[\[\/rtl\]\]$/.test(part)) return <span className="text-rtl" dir="rtl" key={index}>{part.replace(/^\[\[rtl\]\]|\[\[\/rtl\]\]$/g, "")}</span>;
     return <span key={index}>{part}</span>;
