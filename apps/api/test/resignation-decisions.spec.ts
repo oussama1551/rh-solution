@@ -8,6 +8,11 @@ describe("resignation decisions", () => {
       .toBe("أحمد / ___");
   });
 
+  it("isole les valeurs latines dans les phrases arabes", () => {
+    expect(substituteVariables("السيد {{employee_name}} من منصب {{employee_position}}", { employee_name: "LABANI ALI", employee_position: "Chargé de production" }))
+      .toBe("السيد [[ltr]]LABANI ALI[[/ltr]] من منصب [[ltr]]Chargé de production[[/ltr]]");
+  });
+
   it("protège la numérotation concurrente par une unicité société/année/numéro", () => {
     const sql = readFileSync(join(__dirname, "../prisma/migrations/20260909103000_resignation_decisions/migration.sql"), "utf8");
     expect(sql).toContain("resignation_decisions_unit_id_sequence_year_sequence_number_key");

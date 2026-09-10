@@ -262,7 +262,7 @@ export class ResignationDecisionsService {
 
 const unitSelect = { id: true, name: true, code: true, legalLogoPath: true, fullLegalName: true, legalForm: true, legalAddress: true, capitalSocial: true, rcNumber: true, nifNumber: true, artNumber: true, legalPhones: true, legalEmail: true, legalWebsite: true, gerantName: true, gerantTitle: true, resignationDecisionTemplate: true, positionChangeDecisionTemplate: true } as const;
 const decisionSelect = { id: true, decisionType: true, decisionNumber: true, decisionDate: true, effectiveDate: true, generatedAt: true, generatedBy: { select: { fullName: true, username: true } } } as const;
-export function substituteVariables(template: string, vars: Record<string,string>) { return template.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => vars[key] || "___"); }
+export function substituteVariables(template: string, vars: Record<string,string>) { return template.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => formatSubstitutedValue(vars[key] || "___")); }
 export function normalizeResignationTemplateForPdf(value: string) { return normalizeTemplateText(value); }
 export function selectResignationDecisionTemplate(value?: string | null) { return decisionTemplate({ resignationDecisionTemplate: value, positionChangeDecisionTemplate: null }, "RESIGNATION"); }
 function templateVariables(template: string) { return new Set(Array.from(template.matchAll(/{{\s*([a-z_]+)\s*}}/gi), match => match[1])); }
@@ -337,10 +337,16 @@ function renderDecisionLines(content: string) {
     if (/^(المعن|ملف المعني)$/.test(semantic)) return `<div class="decision-line${alignClass}">${rich(line)}</div>`;
     if (/^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(semantic)) return `<div class="signature${alignClass}">${rich(line)}</div>`;
     if (/^-/.test(semantic)) return `<div class="decision-line recital${alignClass}">${rich(line)}</div>`;
-    const article = semantic.match(/^(المادة\s+\d+\s*:)(.*)$/);
+    const article = line.match(/^(المادة\s+\d+\s*:)(.*)$/);
     if (article) return `<div class="decision-line article${alignClass}"><strong>${esc(article[1])}</strong>${rich(article[2])}</div>`;
+    if (/^المادة\s+\d+\s*:/.test(semantic)) return `<div class="decision-line article${alignClass}">${rich(line)}</div>`;
     return `<div class="decision-line${alignClass}">${rich(line)}</div>`;
   }).join("");
+}
+function formatSubstitutedValue(value: string) {
+  const text = String(value || "___");
+  if (text === "___" || text.includes("[[")) return text;
+  return /[A-Za-zÀ-ÿ]/.test(text) ? `[[ltr]]${text}[[/ltr]]` : text;
 }
 function stripInlineMarkers(value: string) {
   return value
@@ -352,6 +358,7 @@ function stripInlineMarkers(value: string) {
 function rich(v: unknown) {
   return esc(v)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*\*/g, "")
     .replace(/\[\[small\]\](.+?)\[\[\/small\]\]/g, '<span class="text-small">$1</span>')
     .replace(/\[\[large\]\](.+?)\[\[\/large\]\]/g, '<span class="text-large">$1</span>')
     .replace(/\[\[size:(\d{1,2})\]\](.+?)\[\[\/size\]\]/g, (_, size, text) => `<span style="font-size:${Math.min(28, Math.max(8, Number(size)))}px">${text}</span>`)
