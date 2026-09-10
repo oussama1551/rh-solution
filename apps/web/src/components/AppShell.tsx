@@ -19,7 +19,7 @@ import {
   ,ScrollText
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { NotificationMenuCounts, Permission, SyncState } from "../lib/types";
 import { useApi } from "../lib/useApi";
@@ -68,6 +68,7 @@ const navItems: NavItem[] = [
 
 export function AppShell() {
   const { user, logout, can } = useAuth();
+  const location = useLocation();
   const [density, setDensity] = useState(() => localStorage.getItem("rh.uiDensity") || "compact");
   const sync = useApi<SyncState>("/api/sync/state", { connected: false, lastSuccessAt: null, lastAttemptAt: null, running: false, lastError: null });
   const counts = useApi<NotificationMenuCounts>("/api/notifications/menu-counts", { notifications: 0, validation: 0, messages: 0 });
@@ -111,7 +112,7 @@ export function AppShell() {
             return (
               <div className="nav-group" key={group.key}>
                 <div className="nav-group-title"><GroupIcon size={14} /><span>{group.label}</span></div>
-                {items.map(item => <SidebarLink key={item.to} item={item} counts={counts.data} />)}
+                {items.map(item => <SidebarLink key={item.to} item={item} counts={counts.data} visibleNav={visibleNav} pathname={location.pathname} />)}
               </div>
             );
           })}
@@ -153,16 +154,27 @@ export function AppShell() {
   );
 }
 
-function SidebarLink({ item, counts }: { item: NavItem; counts: NotificationMenuCounts }) {
+function SidebarLink({ item, counts, visibleNav, pathname }: { item: NavItem; counts: NotificationMenuCounts; visibleNav: NavItem[]; pathname: string }) {
   const Icon = item.icon;
   const badge = navBadge(item.to, counts);
+  const active = isNavItemActive(item, visibleNav, pathname);
   return (
-    <NavLink to={item.to} className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}>
+    <NavLink to={item.to} className={() => `nav-link ${active ? "active" : ""}`}>
       <Icon size={17} />
       <span>{item.label}</span>
       {badge > 0 && <span className="nav-badge">{badge}</span>}
     </NavLink>
   );
+}
+
+function isNavItemActive(item: NavItem, visibleNav: NavItem[], pathname: string) {
+  if (pathname === item.to) return true;
+  if (!pathname.startsWith(`${item.to}/`)) return false;
+  return !visibleNav.some(other => other.to !== item.to && pathnameMatches(other.to, pathname) && other.to.length > item.to.length);
+}
+
+function pathnameMatches(target: string, pathname: string) {
+  return pathname === target || pathname.startsWith(`${target}/`);
 }
 
 function navBadge(to: string, counts: NotificationMenuCounts) {
