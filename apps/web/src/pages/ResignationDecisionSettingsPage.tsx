@@ -1,4 +1,4 @@
-import { Bold, Heading1, List, Pilcrow, RotateCcw, Save, Signature, Upload } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Heading1, List, Pilcrow, RotateCcw, Save, Signature, TextCursorInput, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { PageHeader } from "../components/PageHeader";
@@ -93,6 +93,22 @@ export function ResignationDecisionSettingsPage() {
       textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
     });
   }
+  function alignCurrentLine(direction: "right" | "center" | "left") {
+    const textarea = editorRef.current;
+    const cursor = textarea?.selectionStart ?? activeTemplate.length;
+    const lineStart = activeTemplate.lastIndexOf("\n", Math.max(0, cursor - 1)) + 1;
+    const lineEndIndex = activeTemplate.indexOf("\n", cursor);
+    const lineEnd = lineEndIndex === -1 ? activeTemplate.length : lineEndIndex;
+    const currentLine = activeTemplate.slice(lineStart, lineEnd).replace(/^::(center|left|right)::\s*/, "");
+    const nextLine = direction === "right" ? currentLine : `::${direction}:: ${currentLine}`;
+    const next = `${activeTemplate.slice(0, lineStart)}${nextLine}${activeTemplate.slice(lineEnd)}`;
+    updateTemplate(next);
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      const nextCursor = lineStart + nextLine.length;
+      textarea?.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
   async function save(){ if(!form)return; await api(`/api/resignation-decisions/units/${form.id}`,{method:"PATCH",body:JSON.stringify(form)}); setMessage("Profil juridique et modèle enregistrés."); await units.reload(); }
   async function logo(file?:File){if(!file||!form)return;const body=new FormData();body.append("logo",file);await api(`/api/resignation-decisions/units/${form.id}/logo`,{method:"POST",body});setMessage("Logo enregistré.");await units.reload();}
   return <><PageHeader title="Décisions RH — sociétés"/><section className="panel resignation-settings">
@@ -104,6 +120,13 @@ export function ResignationDecisionSettingsPage() {
       <div className="decision-word-editor">
         <div className="decision-editor-toolbar">
           <button type="button" onClick={()=>wrapText("**", "**", "نص مهم")}><Bold size={14}/> Gras</button>
+          <button type="button" onClick={()=>wrapText("[[small]]", "[[/small]]", "نص صغير")}><TextCursorInput size={14}/> Petit</button>
+          <button type="button" onClick={()=>wrapText("[[large]]", "[[/large]]", "نص كبير")}><TextCursorInput size={14}/> Grand</button>
+          <button type="button" onClick={()=>alignCurrentLine("right")}><AlignRight size={14}/> Droite</button>
+          <button type="button" onClick={()=>alignCurrentLine("center")}><AlignCenter size={14}/> Centre</button>
+          <button type="button" onClick={()=>alignCurrentLine("left")}><AlignLeft size={14}/> Gauche</button>
+          <button type="button" onClick={()=>wrapText("[[rtl]]", "[[/rtl]]", "نص عربي")}><AlignRight size={14}/> RTL</button>
+          <button type="button" onClick={()=>wrapText("[[ltr]]", "[[/ltr]]", "Texte latin")}><AlignLeft size={14}/> LTR</button>
           <button type="button" onClick={()=>insertText("\nقـــــــرار\n")}><Heading1 size={14}/> Titre</button>
           <button type="button" onClick={()=>insertText("\n- ")}><List size={14}/> Puce</button>
           <button type="button" onClick={()=>insertText("\nالمادة 01: ")}><Pilcrow size={14}/> Article</button>
@@ -123,16 +146,22 @@ export function ResignationDecisionSettingsPage() {
 }
 
 function PreviewLine({ line }: { line: string }) {
-  const text = line.trim();
-  const className = !text ? "blank" : /^-/.test(text) ? "recital" : /^يق/.test(text) ? "center" : /^(المديري|مديري|رقم|قـ|قــــ)/.test(text) ? "head" : /^المادة\s+\d+\s*:/.test(text) ? "article" : /^(مسير الشركة|{{gerant_name}})/.test(text) ? "signature" : "";
+  let text = line.trim();
+  const align = text.match(/^::(center|left|right)::\s*(.*)$/);
+  if (align) text = align[2];
+  const className = `${!text ? "blank" : /^-/.test(text) ? "recital" : /^يق/.test(text) ? "center" : /^(المديري|مديري|رقم|قـ|قــــ)/.test(text) ? "head" : /^المادة\s+\d+\s*:/.test(text) ? "article" : /^(مسير الشركة|{{gerant_name}})/.test(text) ? "signature" : ""} ${align ? `align-${align[1]}` : ""}`;
   return <p className={className}>{renderInline(text)}</p>;
 }
 
 function renderInline(value: string) {
-  const parts = value.split(/(\{\{[^}]+\}\}|\*\*[^*]+\*\*)/g).filter(Boolean);
+  const parts = value.split(/(\{\{[^}]+\}\}|\*\*[^*]+\*\*|\[\[(?:small|large|ltr|rtl)\]\].+?\[\[\/(?:small|large|ltr|rtl)\]\])/g).filter(Boolean);
   return parts.map((part, index) => {
     if (/^\{\{[^}]+\}\}$/.test(part)) return <code key={index}>{part}</code>;
     if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (/^\[\[small\]\].+\[\[\/small\]\]$/.test(part)) return <span className="text-small" key={index}>{part.replace(/^\[\[small\]\]|\[\[\/small\]\]$/g, "")}</span>;
+    if (/^\[\[large\]\].+\[\[\/large\]\]$/.test(part)) return <span className="text-large" key={index}>{part.replace(/^\[\[large\]\]|\[\[\/large\]\]$/g, "")}</span>;
+    if (/^\[\[ltr\]\].+\[\[\/ltr\]\]$/.test(part)) return <span className="text-ltr" dir="ltr" key={index}>{part.replace(/^\[\[ltr\]\]|\[\[\/ltr\]\]$/g, "")}</span>;
+    if (/^\[\[rtl\]\].+\[\[\/rtl\]\]$/.test(part)) return <span className="text-rtl" dir="rtl" key={index}>{part.replace(/^\[\[rtl\]\]|\[\[\/rtl\]\]$/g, "")}</span>;
     return <span key={index}>{part}</span>;
   });
 }

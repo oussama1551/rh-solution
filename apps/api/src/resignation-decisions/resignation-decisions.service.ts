@@ -253,7 +253,7 @@ export class ResignationDecisionsService {
     const fontPath = "C:\\Windows\\Fonts\\arial.ttf";
     const font = existsSync(fontPath) ? (await readFile(fontPath)).toString("base64") : "";
     const lines = renderDecisionLines(String(s.content || ""));
-    return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>@font-face{font-family:ArabicLocal;src:url(data:font/ttf;base64,${font})}*{box-sizing:border-box}@page{size:A4;margin:0}html,body{margin:0;padding:0;background:white}.page{font-family:ArabicLocal,Arial,sans-serif;direction:rtl;width:210mm;min-height:297mm;padding:14mm 20mm 14mm;color:#111;font-size:14.2px;line-height:1.72}.letter-logo{display:block;max-width:170mm;max-height:30mm;margin:0 auto 8mm;object-fit:contain}.doc-head-line{text-align:center;font-weight:800;font-size:15.5px;line-height:1.7}.content{margin-top:14px}.decision-line{margin:4px 0;text-align:justify;page-break-inside:avoid}.decision-line.blank{height:8px;margin:0}.decision-line.recital{padding-right:16px;text-indent:-13px}.decision-line.center{text-align:center;font-weight:800;font-size:17px;margin:15px 0 12px}.decision-line.article{font-size:15px;margin:7px 0}.decision-line.article strong{font-weight:800}.copies{margin-top:20px;line-height:1.85}.signature{margin-top:10mm;margin-right:auto;width:58mm;text-align:center;line-height:1.9;font-size:15px}.signature + .signature{margin-top:0}.signature strong{font-weight:800}</style></head><body><main class="page">${s.logo ? `<img class="letter-logo" src="${s.logo}">` : ""}${lines}</main></body></html>`;
+    return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>@font-face{font-family:ArabicLocal;src:url(data:font/ttf;base64,${font})}*{box-sizing:border-box}@page{size:A4;margin:0}html,body{margin:0;padding:0;background:white}.page{font-family:ArabicLocal,Arial,sans-serif;direction:rtl;width:210mm;min-height:297mm;padding:14mm 20mm 14mm;color:#111;font-size:14.2px;line-height:1.72}.letter-logo{display:block;max-width:170mm;max-height:30mm;margin:0 auto 8mm;object-fit:contain}.doc-head-line{text-align:center;font-weight:800;font-size:15.5px;line-height:1.7}.content{margin-top:14px}.decision-line{margin:4px 0;text-align:justify;page-break-inside:avoid}.decision-line.blank{height:8px;margin:0}.decision-line.recital{padding-right:16px;text-indent:-13px}.decision-line.center{text-align:center;font-weight:800;font-size:17px;margin:15px 0 12px}.decision-line.align-center{text-align:center}.decision-line.align-left{text-align:left}.decision-line.align-right{text-align:right}.decision-line.article{font-size:15px;margin:7px 0}.decision-line.article strong{font-weight:800}.text-small{font-size:.88em}.text-large{font-size:1.18em}.text-ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}.text-rtl{direction:rtl;unicode-bidi:isolate}.copies{margin-top:20px;line-height:1.85}.signature{margin-top:10mm;margin-right:auto;width:58mm;text-align:center;line-height:1.9;font-size:15px}.signature + .signature{margin-top:0}.signature strong{font-weight:800}</style></head><body><main class="page">${s.logo ? `<img class="letter-logo" src="${s.logo}">` : ""}${lines}</main></body></html>`;
   }
   private async renderPdf(html: string) { const executablePath = chromePath(); const browser = await puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }); try { const page = await browser.newPage(); await page.setContent(html, { waitUntil: "load" }); return Buffer.from(await page.pdf({ format: "A4", printBackground: true })); } finally { await browser.close(); } }
   private adminOnly(actor: RequestUser) { if (!actor.roles.includes("ADMIN")) throw new ForbiddenException("Paramétrage réservé à Admin."); }
@@ -325,19 +325,29 @@ function normalizeTemplateText(value: string) {
 }
 function renderDecisionLines(content: string) {
   return content.split(/\r?\n/).map(raw => {
-    const line = raw.trim();
+    let line = raw.trim();
     if (!line) return `<div class="decision-line blank"></div>`;
-    if (/^(المديري|مديري|رقم|قـ|قــــ|قرار الاستقالة)/.test(line)) return `<div class="doc-head-line">${rich(line)}</div>`;
-    if (/^يق/.test(line)) return `<div class="decision-line center">${rich(line)}</div>`;
-    if (/^نسخة/.test(line)) return `<div class="copies">${rich(line)}</div>`;
-    if (/^(المعن|ملف المعني)$/.test(line)) return `<div class="decision-line">${rich(line)}</div>`;
-    if (/^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(line)) return `<div class="signature">${rich(line)}</div>`;
-    if (/^-/.test(line)) return `<div class="decision-line recital">${rich(line)}</div>`;
+    const align = line.match(/^::(center|left|right)::\s*(.*)$/);
+    const alignClass = align ? ` align-${align[1]}` : "";
+    if (align) line = align[2];
+    if (/^(المديري|مديري|رقم|قـ|قــــ|قرار الاستقالة)/.test(line)) return `<div class="doc-head-line${alignClass}">${rich(line)}</div>`;
+    if (/^يق/.test(line)) return `<div class="decision-line center${alignClass}">${rich(line)}</div>`;
+    if (/^نسخة/.test(line)) return `<div class="copies${alignClass}">${rich(line)}</div>`;
+    if (/^(المعن|ملف المعني)$/.test(line)) return `<div class="decision-line${alignClass}">${rich(line)}</div>`;
+    if (/^(مسير الشركة|{{gerant_name}}|ع\.|أ\.)/.test(line)) return `<div class="signature${alignClass}">${rich(line)}</div>`;
+    if (/^-/.test(line)) return `<div class="decision-line recital${alignClass}">${rich(line)}</div>`;
     const article = line.match(/^(المادة\s+\d+\s*:)(.*)$/);
-    if (article) return `<div class="decision-line article"><strong>${esc(article[1])}</strong>${rich(article[2])}</div>`;
-    return `<div class="decision-line">${rich(line)}</div>`;
+    if (article) return `<div class="decision-line article${alignClass}"><strong>${esc(article[1])}</strong>${rich(article[2])}</div>`;
+    return `<div class="decision-line${alignClass}">${rich(line)}</div>`;
   }).join("");
 }
-function rich(v: unknown) { return esc(v).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"); }
+function rich(v: unknown) {
+  return esc(v)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[\[small\]\](.+?)\[\[\/small\]\]/g, '<span class="text-small">$1</span>')
+    .replace(/\[\[large\]\](.+?)\[\[\/large\]\]/g, '<span class="text-large">$1</span>')
+    .replace(/\[\[ltr\]\](.+?)\[\[\/ltr\]\]/g, '<span class="text-ltr" dir="ltr">$1</span>')
+    .replace(/\[\[rtl\]\](.+?)\[\[\/rtl\]\]/g, '<span class="text-rtl" dir="rtl">$1</span>');
+}
 function esc(v: unknown) { return String(v ?? "___").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]!)); }
 function chromePath() { const candidates = ["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe", "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe", "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"]; const found = candidates.find(existsSync); if (!found) throw new BadRequestException("Chrome ou Edge est requis sur le serveur pour générer le PDF."); return found; }

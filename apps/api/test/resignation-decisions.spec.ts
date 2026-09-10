@@ -36,6 +36,11 @@ describe("resignation decisions", () => {
       .toBe("المادة 01: **نص مهم**");
   });
 
+  it("conserve les marques de taille et direction volontaires", () => {
+    expect(normalizeResignationTemplateForPdf("::center:: [[large]]قرار[[/large]] [[ltr]]DG/RH[[/ltr]]"))
+      .toBe("::center:: [[large]]قرار[[/large]] [[ltr]]DG/RH[[/ltr]]");
+  });
+
   it("ignore un modèle figé sans variables employé et dates", () => {
     const template = selectResignationDecisionTemplate("المادة 01: يوافق على استقالة السيد بومالي وائل من منصب مهندس في الصيانة.");
     expect(template).toContain("{{employee_name}}");
