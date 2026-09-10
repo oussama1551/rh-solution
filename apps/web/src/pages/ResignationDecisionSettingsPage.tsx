@@ -138,7 +138,7 @@ export function ResignationDecisionSettingsPage() {
     const lineEndIndex = activeTemplate.indexOf("\n", cursor);
     const lineEnd = lineEndIndex === -1 ? activeTemplate.length : lineEndIndex;
     const currentLine = activeTemplate.slice(lineStart, lineEnd).replace(/^::(center|left|right)::\s*/, "");
-    const nextLine = direction === "right" ? currentLine : `::${direction}:: ${currentLine}`;
+    const nextLine = `::${direction}:: ${currentLine}`;
     const next = `${activeTemplate.slice(0, lineStart)}${nextLine}${activeTemplate.slice(lineEnd)}`;
     updateTemplate(next);
     window.requestAnimationFrame(() => {
