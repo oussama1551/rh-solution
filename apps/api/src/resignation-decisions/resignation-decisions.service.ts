@@ -257,7 +257,7 @@ export class ResignationDecisionsService {
   }
   private async renderPdf(html: string) { const executablePath = chromePath(); const browser = await puppeteer.launch({ executablePath, headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] }); try { const page = await browser.newPage(); await page.setContent(html, { waitUntil: "load" }); return Buffer.from(await page.pdf({ format: "A4", printBackground: true })); } finally { await browser.close(); } }
   private adminOnly(actor: RequestUser) { if (!actor.roles.includes("ADMIN")) throw new ForbiddenException("Paramétrage réservé à Admin."); }
-  private generatorOnly(actor: RequestUser) { if (!actor.roles.some(r => r === "ADMIN" || r === "DRH")) throw new ForbiddenException("Génération réservée à Admin et DRH."); }
+  private generatorOnly(actor: RequestUser) { if (!actor.roles.some(r => r === "ADMIN" || r === "DRH" || r === "GRH")) throw new ForbiddenException("Génération réservée à Admin, DRH et GRH."); }
 }
 
 const unitSelect = { id: true, name: true, code: true, legalLogoPath: true, fullLegalName: true, legalForm: true, legalAddress: true, capitalSocial: true, rcNumber: true, nifNumber: true, artNumber: true, legalPhones: true, legalEmail: true, legalWebsite: true, gerantName: true, gerantTitle: true, resignationDecisionTemplate: true, positionChangeDecisionTemplate: true } as const;

@@ -26,7 +26,7 @@ export function ResignedEmployeesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canManageResigns = Boolean(user?.roles.some(role => ["ADMIN", "DRH", "GRH"].includes(role)));
-  const canGenerateDecision = Boolean(user?.roles.some(role => ["ADMIN", "DRH"].includes(role)));
+  const canGenerateDecision = Boolean(user?.roles.some(role => ["ADMIN", "DRH", "GRH"].includes(role)));
   const [decisionBusy,setDecisionBusy]=useState<string|null>(null);
   const [decisionProgress,setDecisionProgress]=useState<{label:string;value:number}|null>(null);
   const [decisionDraft,setDecisionDraft]=useState<{row:ResignRecordRow;regenerate:boolean;data:ResignationDecisionDraft}|null>(null);
