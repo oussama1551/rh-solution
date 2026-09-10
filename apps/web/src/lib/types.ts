@@ -433,6 +433,18 @@ export type DashboardKpis = {
       sourceId: string | null;
     }>;
   }>;
+  employeeStatus: Array<{ label: string; value: number; tone: "green" | "red" | "gray" }>;
+  employeesByUnit: Array<{ label: string; value: number }>;
+  employeesByDepartment: Array<{ label: string; value: number }>;
+  deviceStatus: Array<{ label: string; value: number; tone: "green" | "red" | "gray" }>;
+  absenceByUnitToday: Array<{ label: string; planned: number; absent: number; notDue: number; rate: number }>;
+  attendanceTrend: Array<{ date: string; label: string; present: number; absent: number; incomplete: number; empty: number; presenceRate: number }>;
+  riskSnapshot: {
+    pendingPlanning: number;
+    pendingFlags: number;
+    offlineDevices: number;
+    absencesToday: number;
+  };
 };
 
 export type AttendanceFlag = {

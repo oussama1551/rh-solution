@@ -398,7 +398,7 @@ export class ReportsService {
     const monthlyPlanning = await this.pointagePlanning({ startDate, endDate, status: EmployeeStatus.ACTIVE }, actor);
     const scopedEmployeeWhere = employeeScopeWhere(actor);
 
-    const [employeeCount, activeEmployeeCount, pendingAttendanceFlags, offlineDevices, todayAssignments, pendingPlanningRows, pendingGroups] = await Promise.all([
+    const [employeeCount, activeEmployeeCount, pendingAttendanceFlags, offlineDevices, todayAssignments, pendingPlanningRows, pendingGroups, scopedEmployees, deviceStatusRows, resignedEmployeeCount] = await Promise.all([
       this.prisma.employee.count({ where: scopedEmployeeWhere }),
       this.prisma.employee.count({ where: { ...scopedEmployeeWhere, status: EmployeeStatus.ACTIVE } }),
       this.prisma.attendanceFlag.count({
@@ -445,7 +445,18 @@ export class ReportsService {
           ...(actor?.id ? { submittedById: actor.id } : {}),
           ...this.groupScopeForDashboard(actor)
         }
-      })
+      }),
+      this.prisma.employee.findMany({
+        where: scopedEmployeeWhere,
+        select: {
+          id: true,
+          status: true,
+          department: true,
+          group: { select: { subUnit: { select: { unit: { select: { name: true } } } } } }
+        }
+      }),
+      this.prisma.device.groupBy({ by: ["status"], _count: { _all: true } }),
+      this.prisma.employee.count({ where: { ...scopedEmployeeWhere, status: EmployeeStatus.RESIGNED } })
     ]);
     const workingGroupMap = new Map<string, { id: string; name: string; employeeIds: Set<string>; shiftLabels: Set<string> }>();
     for (const assignment of todayAssignments) {
@@ -458,6 +469,34 @@ export class ReportsService {
       workingGroupMap.set(groupId, row);
     }
     const pendingSubmissionIds = new Set(pendingPlanningRows.map(row => row.submissionId || row.id));
+    const employeesByUnit = topDistribution(scopedEmployees.map(employee => employee.group?.subUnit?.unit?.name || "Sans unité"), 6);
+    const employeesByDepartment = topDistribution(scopedEmployees.map(employee => employee.department || "Sans département"), 6);
+    const deviceStatus = [
+      { label: "Connectés", value: deviceStatusRows.find(row => row.status === DeviceStatus.ONLINE)?._count._all || 0, tone: "green" as const },
+      { label: "Hors ligne", value: deviceStatusRows.find(row => row.status === DeviceStatus.OFFLINE)?._count._all || 0, tone: "red" as const },
+      { label: "Inconnus", value: deviceStatusRows.find(row => row.status === DeviceStatus.UNKNOWN)?._count._all || 0, tone: "gray" as const }
+    ];
+    const trendDates = enumerateDateKeys(addDays(today, -6), today);
+    const trendByDate = new Map(trendDates.map(date => [date, { date, label: shortDayLabel(date), present: 0, absent: 0, incomplete: 0, empty: 0, presenceRate: 0 }]));
+    for (const row of monthlyPlanning) {
+      const trend = trendByDate.get(row.workDate);
+      if (!trend) continue;
+      if (row.serviceStatus === "complete") trend.present += 1;
+      else if (row.serviceStatus === "absent") trend.absent += 1;
+      else if (row.serviceStatus === "incomplete") trend.incomplete += 1;
+      else if (row.serviceStatus === "empty") trend.empty += 1;
+    }
+    const attendanceTrend = [...trendByDate.values()].map(row => {
+      const total = row.present + row.absent + row.incomplete + row.empty;
+      return { ...row, presenceRate: total ? roundRate(row.present + row.incomplete, total) : 0 };
+    });
+    const absenceByUnitToday = dailyAbsences.byUnit.map(row => ({
+      label: row.unitName,
+      planned: row.planned,
+      absent: row.absent,
+      notDue: row.notDue,
+      rate: row.planned ? roundRate(row.absent, row.planned) : 0
+    })).sort((left, right) => right.absent - left.absent).slice(0, 6);
 
     return {
       presenceRate: expectedDays === 0 ? 0 : roundRate(presentDays, expectedDays),
@@ -476,7 +515,22 @@ export class ReportsService {
         employeeCount: row.employeeIds.size,
         shiftLabels: [...row.shiftLabels]
       })).sort((left, right) => left.name.localeCompare(right.name)),
-      absenceAlerts: dailyAbsences.rows.filter(row => row.status === "ABSENT").slice(0, 10)
+      absenceAlerts: dailyAbsences.rows.filter(row => row.status === "ABSENT").slice(0, 10),
+      employeeStatus: [
+        { label: "Actifs", value: activeEmployeeCount, tone: "green" },
+        { label: "Démissionnés", value: resignedEmployeeCount, tone: "red" }
+      ],
+      employeesByUnit,
+      employeesByDepartment,
+      deviceStatus,
+      absenceByUnitToday,
+      attendanceTrend,
+      riskSnapshot: {
+        pendingPlanning: pendingSubmissionIds.size + pendingGroups,
+        pendingFlags: pendingAttendanceFlags,
+        offlineDevices,
+        absencesToday: dailyAbsences.totals.absent
+      }
     };
   }
 
@@ -762,6 +816,19 @@ export class ReportsService {
 
 function roundRate(value: number, total: number): number {
   return Math.round((value / total) * 10_000) / 100;
+}
+
+function topDistribution(values: string[], limit: number) {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) || 0) + 1);
+  return [...counts.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label))
+    .slice(0, limit);
+}
+
+function shortDayLabel(dateKey: string) {
+  return new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "2-digit", timeZone: "UTC" }).format(parseDateKey(dateKey));
 }
 
 function displayMatricule(employee: { localMatricule: string | null; biotimeCode: string | null; employeeCode: string }) {
