@@ -35,6 +35,7 @@ export function HrDecisionDraftModal({ draft, busy, regenerate, onClose, onSubmi
         <DraftField name="category" label="Catégorie / صنف" value={draft.decision.category} source={draft.sources.category}/>
       </>}
       <DraftField name="decisionDate" label={isPositionChange ? "Date décision / année séquence" : "Date création décision — عين مليلة في"} type="date" value={draft.decision.decisionDate} source="Utilisée par {{decision_date}}, l'année et la séquence"/>
+      {!isPositionChange&&<DraftField name="contractDate" label="Date du contrat" type="date" value={draft.decision.contractDate} source={`${draft.sources.contractDate || "Contrat RH"} — modifiable uniquement pour ce document`}/>} 
       {!isPositionChange&&<DraftField name="requestDate" label="Date demande démission" type="date" value={draft.decision.requestDate} source="Manuel / décision"/>}
       <DraftField name="effectiveDate" label="Date effet décision" type="date" value={draft.decision.effectiveDate} source={draft.sources.effectiveDate}/>
       <DraftField name="gerantName" label="Signataire" value={draft.decision.gerantName} source={draft.sources.gerantName}/>

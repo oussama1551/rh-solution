@@ -41,10 +41,12 @@ export function ResignedEmployeesPage() {
   }
   async function generateFromDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if(!decisionDraft)return; const employeeId=decisionDraft.row.employee?.id; if(!employeeId)return;
+    const mustRegenerate = decisionDraft.regenerate || decisionDraft.data.history.length > 0;
+    if (!decisionDraft.regenerate && decisionDraft.data.history.length > 0 && !window.confirm("Une décision existe déjà. Générer ce document avec la date du contrat affichée créera un nouveau numéro. Continuer ?")) return;
     const form = new FormData(event.currentTarget); const decisionDate = String(form.get("decisionDate") || ""); const decisionType = String(form.get("decisionType") || "RESIGNATION"); const overrides = Object.fromEntries(["employeeName","employeePosition","employeeNumber","hireDate","newPosition","grade","category","contractDate","requestDate","effectiveDate","gerantName"].map(key => [key, String(form.get(key) || "")]));
     setDecisionBusy(decisionDraft.row.id); setDecisionProgress({label:"Génération du document arabe...",value:45}); setError(null);
     try {
-      const generated=await api<ResignationDecision>(`/api/resignation-decisions/employee/${employeeId}/generate`,{method:"POST",body:JSON.stringify({decisionType,decisionDate,regenerate:decisionDraft.regenerate,overrides})});
+      const generated=await api<ResignationDecision>(`/api/resignation-decisions/employee/${employeeId}/generate`,{method:"POST",body:JSON.stringify({decisionType,decisionDate,regenerate:mustRegenerate,overrides})});
       setDecisionProgress({label:"Préparation du téléchargement...",value:75}); await download(generated); setDecisionDraft(null); await rows.reload();
     } catch(err){setError(readableError(err,"Génération impossible."));} finally{setDecisionBusy(null);window.setTimeout(()=>setDecisionProgress(null),700);}
   }

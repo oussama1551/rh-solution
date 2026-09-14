@@ -308,6 +308,14 @@ enum AttendanceSummaryStatus {
   @@map("attendance_summary_status")
 }
 
+enum SickLeaveType {
+  MALADIE
+  ACCIDENT_TRAVAIL
+  DECES
+
+  @@map("sick_leave_type")
+}
+
 enum OvertimeRateType {
   RATE_50
   RATE_75
@@ -950,20 +958,20 @@ model Unit {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  legalLogoPath               String? @map("legal_logo_path")
-  fullLegalName               String? @map("full_legal_name") @db.VarChar(240)
-  legalForm                   String? @map("legal_form") @db.VarChar(120)
-  legalAddress                String? @map("legal_address")
-  capitalSocial               String? @map("capital_social") @db.VarChar(120)
-  rcNumber                    String? @map("rc_number") @db.VarChar(120)
-  nifNumber                   String? @map("nif_number") @db.VarChar(120)
-  artNumber                   String? @map("art_number") @db.VarChar(120)
-  legalPhones                 String? @map("legal_phones") @db.VarChar(240)
-  legalEmail                  String? @map("legal_email") @db.VarChar(180)
-  legalWebsite                String? @map("legal_website") @db.VarChar(180)
-  gerantName                  String? @map("gerant_name") @db.VarChar(180)
-  gerantTitle                 String? @map("gerant_title") @db.VarChar(180)
-  resignationDecisionTemplate String? @map("resignation_decision_template")
+  legalLogoPath                  String? @map("legal_logo_path")
+  fullLegalName                  String? @map("full_legal_name") @db.VarChar(240)
+  legalForm                      String? @map("legal_form") @db.VarChar(120)
+  legalAddress                   String? @map("legal_address")
+  capitalSocial                  String? @map("capital_social") @db.VarChar(120)
+  rcNumber                       String? @map("rc_number") @db.VarChar(120)
+  nifNumber                      String? @map("nif_number") @db.VarChar(120)
+  artNumber                      String? @map("art_number") @db.VarChar(120)
+  legalPhones                    String? @map("legal_phones") @db.VarChar(240)
+  legalEmail                     String? @map("legal_email") @db.VarChar(180)
+  legalWebsite                   String? @map("legal_website") @db.VarChar(180)
+  gerantName                     String? @map("gerant_name") @db.VarChar(180)
+  gerantTitle                    String? @map("gerant_title") @db.VarChar(180)
+  resignationDecisionTemplate    String? @map("resignation_decision_template")
   positionChangeDecisionTemplate String? @map("position_change_decision_template")
 
   subUnits             SubUnit[]
@@ -1154,23 +1162,25 @@ model AbsenceCompensation {
 }
 
 model SickLeaveDeclaration {
-  id           String         @id @default(uuid()) @db.Uuid
-  employeeId   String         @map("employee_id") @db.Uuid
-  dateStart    DateTime       @map("date_start") @db.Date
-  dateEnd      DateTime       @map("date_end") @db.Date
-  note         String?
-  declaredById String?        @map("declared_by") @db.Uuid
-  status       ApprovalStatus @default(APPROVED)
-  approvedById String?        @map("approved_by") @db.Uuid
-  approvedAt   DateTime?      @map("approved_at") @db.Timestamptz(6)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String         @id @default(uuid()) @db.Uuid
+  employeeId    String         @map("employee_id") @db.Uuid
+  dateStart     DateTime       @map("date_start") @db.Date
+  dateEnd       DateTime       @map("date_end") @db.Date
+  sickLeaveType SickLeaveType  @default(MALADIE) @map("sick_leave_type")
+  note          String?
+  declaredById  String?        @map("declared_by") @db.Uuid
+  status        ApprovalStatus @default(APPROVED)
+  approvedById  String?        @map("approved_by") @db.Uuid
+  approvedAt    DateTime?      @map("approved_at") @db.Timestamptz(6)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   declaredBy User?    @relation("SickLeaveDeclarer", fields: [declaredById], references: [id], onDelete: SetNull)
   approvedBy User?    @relation("SickLeaveApprover", fields: [approvedById], references: [id], onDelete: SetNull)
 
   @@index([employeeId, dateStart, dateEnd])
+  @@index([sickLeaveType])
   @@index([status])
   @@index([approvedById])
   @@map("sick_leave_declarations")
@@ -1276,6 +1286,7 @@ model AttendanceSummaryRecord {
   overtimeHoursRate100 Decimal                 @default(0) @map("overtime_hours_rate_100") @db.Decimal(7, 2)
   isCompensation       Boolean                 @default(false) @map("is_compensation")
   leaveType            LeaveType?              @map("leave_type")
+  sickLeaveType        SickLeaveType?          @map("sick_leave_type")
   exceptionalReason    ExceptionalLeaveReason? @map("exceptional_reason")
   shiftType            ShiftType?              @map("shift_type")
   generatedAt          DateTime                @default(now()) @map("generated_at") @db.Timestamptz(6)

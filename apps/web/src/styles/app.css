@@ -611,13 +611,16 @@ select {
 .daily-code-a { color: #b91c1c; background: #fee2e2; box-shadow: inset 0 0 0 1px #fca5a5; }
 .daily-code-m { color: #be185d; background: #fce7f3; box-shadow: inset 0 0 0 1px #f9a8d4; }
 .daily-code-c { color: #0369a1; background: #e0f2fe; box-shadow: inset 0 0 0 1px #7dd3fc; }
+.daily-code-rc { color: #0f766e; background: #ccfbf1; box-shadow: inset 0 0 0 1px #5eead4; }
 .daily-code-i { color: #c2410c; background: #ffedd5; box-shadow: inset 0 0 0 1px #fdba74; }
 .daily-code-sp { color: #a16207; background: #fef3c7; box-shadow: inset 0 0 0 1px #fcd34d; }
 .daily-code-dc { color: #475569; background: #e2e8f0; box-shadow: inset 0 0 0 1px #94a3b8; }
 .daily-code-fc { color: #6b21a8; background: #f3e8ff; box-shadow: inset 0 0 0 1px #d8b4fe; }
 .daily-code-aa, .daily-code-ai, .daily-code-am, .daily-code-adc, .daily-code-san, .daily-code-at, .daily-code-ama, .daily-code-ad { color: #9a3412; background: #ffedd5; box-shadow: inset 0 0 0 1px #fb923c; }
+.daily-code-dcs { color: #991b1b; background: #fee2e2; box-shadow: inset 0 0 0 1px #f87171; }
 .editable-day { cursor: pointer; transition: background .15s ease; }
 .editable-day:hover { background: #ecfeff !important; box-shadow: inset 0 0 0 1px #14b8a6; }
+.has-absence-hint{position:relative}.absence-day-hint{display:none;position:absolute;z-index:40;left:50%;bottom:calc(100% + 7px);transform:translateX(-50%);width:220px;padding:10px 12px;text-align:left;white-space:normal;background:#fff;border:1px solid #d8e1e9;border-radius:10px;box-shadow:0 12px 30px rgb(15 23 42 / 18%);color:#334155;line-height:1.35}.has-absence-hint:hover .absence-day-hint{display:flex;flex-direction:column;gap:3px}.absence-day-hint:after{content:"";position:absolute;top:100%;left:50%;margin-left:-6px;border:6px solid transparent;border-top-color:#fff}.absence-day-hint strong{font-size:.78rem;color:#be123c}.absence-day-hint.leave strong{color:#0369a1}.absence-day-hint span{font-size:.67rem;text-transform:capitalize;color:#475569}.absence-day-hint small{font-size:.65rem;color:#64748b}.absence-day-hint em{font-size:.65rem;color:#475569;border-top:1px solid #eef2f7;padding-top:4px;margin-top:2px}.absence-day-hint b{font-size:.62rem;color:#0f766e;margin-top:3px}
 .daily-code-overridden { box-shadow: 0 0 0 2px #0f766e; gap: 2px; }
 .daily-cell-selected { position: relative; z-index: 20; background: #ccfbf1 !important; box-shadow: inset 0 0 0 2px #0f766e, 0 0 0 3px rgba(20, 184, 166, .14); }
 .keyboard-code-editor { position: relative; display: flex; align-items: center; justify-content: center; }

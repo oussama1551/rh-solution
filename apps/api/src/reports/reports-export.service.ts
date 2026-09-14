@@ -168,11 +168,11 @@ export class ReportsExportService {
       { header: "Nom Prénom", key: "fullName", width: 28 },
       { header: "Structure / Département", key: "structure", width: 30 },
       ...dates.map(date => ({ header: dayLabel(date), key: date, width: 5 })),
-      ...["P", "A", "AA", "AI", "AM", "ADC", "SAN", "AT", "AMA", "AD", "M", "C", "R", "I", "DC", "FC"].map(code => ({ header: `Total ${code}`, key: `total${code}`, width: 10 }))
+      ...["P", "A", "AA", "AI", "AM", "ADC", "DCS", "SAN", "AT", "AMA", "AD", "M", "C", "RC", "R", "I", "DC", "FC"].map(code => ({ header: `Total ${code}`, key: `total${code}`, width: 10 }))
     ];
     for (const row of rows) {
       const codes = dates.map(date => effectiveSummaryCode(byDay.get(`${row.employee.id}:${date}`)));
-      sheet.addRow({ code: row.employee.code, fullName: row.employee.fullName, structure: structureLabel(row), ...Object.fromEntries(dates.map((date, index) => [date, codes[index]])), ...Object.fromEntries(["P", "A", "AA", "AI", "AM", "ADC", "SAN", "AT", "AMA", "AD", "M", "C", "R", "I", "DC", "FC"].map(code => [`total${code}`, codes.filter(value => value === code).length])) });
+      sheet.addRow({ code: row.employee.code, fullName: row.employee.fullName, structure: structureLabel(row), ...Object.fromEntries(dates.map((date, index) => [date, codes[index]])), ...Object.fromEntries(["P", "A", "AA", "AI", "AM", "ADC", "DCS", "SAN", "AT", "AMA", "AD", "M", "C", "RC", "R", "I", "DC", "FC"].map(code => [`total${code}`, codes.filter(value => value === code).length])) });
     }
     this.styleWorksheet(sheet);
     sheet.views = [{ state: "frozen", xSplit: 3, ySplit: 1 }];
@@ -186,7 +186,7 @@ export class ReportsExportService {
       const chunks: Buffer[] = [];
       document.on("data", chunk => chunks.push(Buffer.from(chunk)));
       document.on("end", () => resolve(Buffer.concat(chunks)));
-      const dates = dateKeys(startDate, endDate), byDay = dailyStatusMap(daily), totals = ["P", "A", "AA", "AI", "AM", "ADC", "SAN", "AT", "AMA", "AD", "M", "C", "R", "I", "DC", "FC"];
+      const dates = dateKeys(startDate, endDate), byDay = dailyStatusMap(daily), totals = ["P", "A", "AA", "AI", "AM", "ADC", "DCS", "SAN", "AT", "AMA", "AD", "M", "C", "RC", "R", "I", "DC", "FC"];
       const headers = ["Mat.", "Nom Prénom", "Structure", ...dates.map(dayLabel), ...totals.map(code => `T.${code}`)];
       const widths = [46, 92, 104, ...dates.map(() => 18), ...totals.map(() => 22)];
       const drawHeader = () => { document.fontSize(13).text("Rapport de synthèse paie — détaillé", 18, 16); drawPdfRow(document, headers, widths, 38, true); };

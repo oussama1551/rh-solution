@@ -206,7 +206,9 @@ export type SummaryDailyRecordRow = {
   overtimeHoursRate100: number;
   shiftType: string | null;
   leaveType: string | null;
+  sickLeaveType: string | null;
   exceptionalReason: string | null;
   generatedAt: Date;
   displayCode?: string;
+  absenceDetail?: { kind: "SICK" | "LEAVE"; label: string; dateStart: string; dateEnd: string; note: string | null; detail: string | null };
 };

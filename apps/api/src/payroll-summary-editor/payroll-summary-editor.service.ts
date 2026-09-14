@@ -9,9 +9,11 @@ const MOTIFS = [
   { code: "P", label: "Présence", source: "RH" }, { code: "I", label: "Pointage incomplet", source: "RH" },
   { code: "A", label: "Absence", source: "RH" }, { code: "R", label: "Repos", source: "RH" },
   { code: "M", label: "Maladie", source: "RH" }, { code: "C", label: "Congé", source: "RH" },
+  { code: "RC", label: "Récupération", source: "RH" },
   { code: "DC", label: "Début contrat", source: "RH" }, { code: "FC", label: "Fin contrat", source: "RH" },
   { code: "AA", label: "Absence autorisée", source: "SAP" }, { code: "AI", label: "Absence injustifiée", source: "SAP" },
-  { code: "AM", label: "Absence maladie", source: "SAP" }, { code: "ADC", label: "Absence décès", source: "SAP" },
+  { code: "AM", label: "Absence maladie", source: "SAP" }, { code: "ADC", label: "Absence début contrat", source: "SAP" },
+  { code: "DCS", label: "Décès", source: "RH" },
   { code: "SAN", label: "Sanction", source: "SAP" }, { code: "AT", label: "Accident travail", source: "SAP" },
   { code: "AMA", label: "Absence maternité", source: "SAP" }, { code: "AD", label: "Absence diverse", source: "SAP" }
 ] as const;

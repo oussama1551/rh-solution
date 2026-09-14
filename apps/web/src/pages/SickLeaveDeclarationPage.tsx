@@ -18,6 +18,7 @@ export function SickLeaveDeclarationPage() {
     employeeId: "",
     dateStart: dateKey(new Date()),
     dateEnd: dateKey(new Date()),
+    sickLeaveType: "MALADIE",
     note: ""
   });
   const [message, setMessage] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export function SickLeaveDeclarationPage() {
           ...(editingId ? {} : { employeeId: filters.employeeId }),
           dateStart: filters.dateStart,
           dateEnd: filters.dateEnd,
+          sickLeaveType: filters.sickLeaveType,
           note: filters.note
         })
       });
@@ -95,7 +97,7 @@ export function SickLeaveDeclarationPage() {
 
   function editSickLeave(row: SickLeaveDeclaration) {
     setEditingId(row.id);
-    update({ employeeId: row.employee.id, dateStart: row.dateStart.slice(0, 10), dateEnd: row.dateEnd.slice(0, 10), note: row.note || "" });
+    update({ employeeId: row.employee.id, dateStart: row.dateStart.slice(0, 10), dateEnd: row.dateEnd.slice(0, 10), sickLeaveType: row.sickLeaveType || "MALADIE", note: row.note || "" });
     setMessage(null); setError(null); window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -137,6 +139,14 @@ export function SickLeaveDeclarationPage() {
             </div>
           )}
           <label className="filter-field">
+            <span>Motif</span>
+            <select value={filters.sickLeaveType} onChange={event => update({ sickLeaveType: event.target.value })}>
+              <option value="MALADIE">Maladie — AM</option>
+              <option value="ACCIDENT_TRAVAIL">Accident de travail — AT</option>
+              <option value="DECES">Décès — DCS</option>
+            </select>
+          </label>
+          <label className="filter-field">
             <span>Début maladie</span>
             <input type="date" value={filters.dateStart} onChange={event => update({ dateStart: event.target.value })} />
           </label>
@@ -167,6 +177,7 @@ export function SickLeaveDeclarationPage() {
           columns={[
             { key: "employee", header: "Employé", render: row => <div className="table-main-cell"><strong>{row.employee.fullName}</strong><span>{displayCode(row.employee)}</span></div>, sortValue: row => row.employee.fullName },
             { key: "department", header: "Département", render: row => row.employee.department || "-", sortValue: row => row.employee.department || "" },
+            { key: "motif", header: "Motif", render: row => sickLeaveTypeLabel(row.sickLeaveType), sortValue: row => row.sickLeaveType },
             { key: "start", header: "Début", render: row => formatDate(row.dateStart), sortValue: row => row.dateStart },
             { key: "end", header: "Fin", render: row => formatDate(row.dateEnd), sortValue: row => row.dateEnd },
             { key: "status", header: "Statut", render: row => <StatusBadge value={row.status} />, sortValue: row => row.status },
@@ -198,4 +209,8 @@ function formatDate(value: string) {
 
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function sickLeaveTypeLabel(value: SickLeaveDeclaration["sickLeaveType"]) {
+  return value === "ACCIDENT_TRAVAIL" ? "Accident de travail (AT)" : value === "DECES" ? "Décès (DCS)" : "Maladie (AM)";
 }

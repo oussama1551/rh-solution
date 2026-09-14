@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { ApprovalStatus, AttendanceSummaryStatus, EmployeeStatus, Prisma } from "@prisma/client";
+import { ApprovalStatus, AttendanceSummaryStatus, EmployeeStatus, Prisma, SickLeaveType } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { RequestUser } from "../common/request-user.type";
 import { PrismaService } from "../prisma/prisma.service";
@@ -92,9 +92,12 @@ export class AttendanceSummaryService {
     const compensationDates = new Set(compensations.map(row => `${row.employeeId}:${toDateKey(row.compensationDate)}`));
     const absenceReversalDates = new Set(absenceReversals.map(row => `${row.employeeId}:${toDateKey(row.absenceDate)}`));
     const sickDates = new Set<string>();
+    const sickTypeByEmployeeDate = new Map<string, SickLeaveType>();
     sickLeaves.forEach(row => {
       for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(analysisEndDate, toDateKey(row.dateEnd)))) {
-        sickDates.add(`${row.employeeId}:${date}`);
+        const key = `${row.employeeId}:${date}`;
+        sickDates.add(key);
+        sickTypeByEmployeeDate.set(key, row.sickLeaveType);
       }
     });
     const leaveDates = new Set<string>();
@@ -126,8 +129,9 @@ export class AttendanceSummaryService {
         const isLeave = leaveDates.has(key);
         const isCompensation = compensationDates.has(key);
         const overtimeHours = boundaryStatus ? { total: 0, rate50: 0, rate75: 0, rate100: 0 } : overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
+        const sickLeaveType = isSick ? sickTypeByEmployeeDate.get(key) || SickLeaveType.MALADIE : null;
         const baseStatus = boundaryStatus || (isSick
-          ? AttendanceSummaryStatus.SICK
+          ? sickLeaveType === SickLeaveType.ACCIDENT_TRAVAIL ? AttendanceSummaryStatus.ACCIDENT : AttendanceSummaryStatus.SICK
           : isLeave
           ? AttendanceSummaryStatus.LEAVE
           : row.plannedShiftType === "REPOS"
@@ -139,7 +143,7 @@ export class AttendanceSummaryService {
           ? AttendanceSummaryStatus.ABSENCE_REVERSED
           : baseStatus;
         const leaveDetails = status === AttendanceSummaryStatus.LEAVE ? leaveDetailsByEmployeeDate.get(key) || null : null;
-        const workedHours = status === AttendanceSummaryStatus.SICK || boundaryStatus ? 0 : row.workedHours || 0;
+        const workedHours = status === AttendanceSummaryStatus.SICK || status === AttendanceSummaryStatus.ACCIDENT || boundaryStatus ? 0 : row.workedHours || 0;
         await tx.attendanceSummaryRecord.upsert({
           where: { employeeId_workDate_periodStart_periodEnd: { employeeId: row.employee.id, workDate: parseDateKey(row.workDate), periodStart: from, periodEnd } },
           update: {
@@ -151,6 +155,7 @@ export class AttendanceSummaryService {
             overtimeHoursRate100: new Prisma.Decimal(overtimeHours.rate100),
             isCompensation,
             leaveType: leaveDetails?.leaveType || null,
+            sickLeaveType,
             exceptionalReason: leaveDetails?.exceptionalReason || null,
             shiftType: row.plannedShiftType as any,
             generatedAt,
@@ -168,6 +173,7 @@ export class AttendanceSummaryService {
             overtimeHoursRate100: new Prisma.Decimal(overtimeHours.rate100),
             isCompensation,
             leaveType: leaveDetails?.leaveType || null,
+            sickLeaveType,
             exceptionalReason: leaveDetails?.exceptionalReason || null,
             shiftType: row.plannedShiftType as any,
             generatedAt,
@@ -183,10 +189,13 @@ export class AttendanceSummaryService {
         const [employeeId, workDate] = key.split(":");
         if (!employeeIds.includes(employeeId)) continue;
         const overtimeHours = overtimeByEmployeeDate.get(key) || { total: 0, rate50: 0, rate75: 0, rate100: 0 };
+        const sickLeaveType = sickTypeByEmployeeDate.get(key) || SickLeaveType.MALADIE;
+        const sickStatus = sickLeaveType === SickLeaveType.ACCIDENT_TRAVAIL ? AttendanceSummaryStatus.ACCIDENT : AttendanceSummaryStatus.SICK;
         await tx.attendanceSummaryRecord.upsert({
           where: { employeeId_workDate_periodStart_periodEnd: { employeeId, workDate: parseDateKey(workDate), periodStart: from, periodEnd } },
           update: {
-            status: AttendanceSummaryStatus.SICK,
+            status: sickStatus,
+            sickLeaveType,
             workedHours: new Prisma.Decimal(0),
             overtimeHours: new Prisma.Decimal(overtimeHours.total),
             overtimeHoursRate50: new Prisma.Decimal(overtimeHours.rate50),
@@ -201,7 +210,8 @@ export class AttendanceSummaryService {
           create: {
             employeeId,
             workDate: parseDateKey(workDate),
-            status: AttendanceSummaryStatus.SICK,
+            status: sickStatus,
+            sickLeaveType,
             workedHours: new Prisma.Decimal(0),
             overtimeHours: new Prisma.Decimal(overtimeHours.total),
             overtimeHoursRate50: new Prisma.Decimal(overtimeHours.rate50),
@@ -435,6 +445,21 @@ export class AttendanceSummaryService {
       orderBy: [{ workDate: "asc" }]
     });
 
+    const employeeIds = [...new Set(records.map(record => record.employeeId))];
+    const [sickLeaves, leaves] = employeeIds.length ? await Promise.all([
+      this.prisma.sickLeaveDeclaration.findMany({
+        where: { employeeId: { in: employeeIds }, dateStart: { lte: parseDateKey(filters.endDate) }, dateEnd: { gte: parseDateKey(filters.startDate) }, status: ApprovalStatus.APPROVED },
+        select: { employeeId: true, dateStart: true, dateEnd: true, sickLeaveType: true, note: true }
+      }),
+      this.prisma.leaveDeclaration.findMany({
+        where: { employeeId: { in: employeeIds }, dateStart: { lte: parseDateKey(filters.endDate) }, dateEnd: { gte: parseDateKey(filters.startDate) }, status: ApprovalStatus.APPROVED },
+        select: { employeeId: true, dateStart: true, dateEnd: true, leaveType: true, exceptionalReason: true, note: true }
+      })
+    ]) : [[], []];
+    const absenceDetails = new Map<string, SummaryDailyRecordRow["absenceDetail"]>();
+    for (const row of sickLeaves) for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(filters.endDate, toDateKey(row.dateEnd)))) absenceDetails.set(`${row.employeeId}:${date}`, { kind: "SICK", label: row.sickLeaveType === SickLeaveType.ACCIDENT_TRAVAIL ? "Accident de travail" : row.sickLeaveType === SickLeaveType.DECES ? "Décès" : "Maladie", dateStart: toDateKey(row.dateStart), dateEnd: toDateKey(row.dateEnd), note: row.note, detail: row.sickLeaveType });
+    for (const row of leaves) for (const date of enumerateDateKeys(maxDate(filters.startDate, toDateKey(row.dateStart)), minDate(filters.endDate, toDateKey(row.dateEnd)))) absenceDetails.set(`${row.employeeId}:${date}`, { kind: "LEAVE", label: "Congé", dateStart: toDateKey(row.dateStart), dateEnd: toDateKey(row.dateEnd), note: row.note, detail: [row.leaveType, row.exceptionalReason].filter(Boolean).join(" · ") || null });
+
     return records.map(record => ({
       id: record.id,
       employeeId: record.employeeId,
@@ -447,7 +472,10 @@ export class AttendanceSummaryService {
       overtimeHoursRate100: Number(record.overtimeHoursRate100),
       shiftType: record.shiftType,
       leaveType: record.leaveType,
+      sickLeaveType: record.sickLeaveType,
       exceptionalReason: record.exceptionalReason,
+      displayCode: record.sickLeaveType === SickLeaveType.ACCIDENT_TRAVAIL ? "AT" : record.sickLeaveType === SickLeaveType.DECES ? "DCS" : record.sickLeaveType === SickLeaveType.MALADIE ? "AM" : undefined,
+      absenceDetail: absenceDetails.get(`${record.employeeId}:${toDateKey(record.workDate)}`),
       generatedAt: record.generatedAt
     }));
   }

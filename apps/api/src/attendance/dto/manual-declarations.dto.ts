@@ -1,4 +1,4 @@
-import { ExceptionalLeaveReason, LeaveType, OvertimeRateType } from "@prisma/client";
+import { ExceptionalLeaveReason, LeaveType, OvertimeRateType, SickLeaveType } from "@prisma/client";
 import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
 
 export class CreateOvertimeDeclarationDto {
@@ -47,6 +47,10 @@ export class CreateSickLeaveDeclarationDto {
   dateEnd!: string;
 
   @IsOptional()
+  @IsEnum(SickLeaveType)
+  sickLeaveType?: SickLeaveType;
+
+  @IsOptional()
   @IsString()
   note?: string;
 }
@@ -56,6 +60,9 @@ export class UpdateSickLeaveDeclarationDto {
   dateStart!: string;
   @IsDateString()
   dateEnd!: string;
+  @IsOptional()
+  @IsEnum(SickLeaveType)
+  sickLeaveType?: SickLeaveType;
   @IsOptional()
   @IsString()
   note?: string;

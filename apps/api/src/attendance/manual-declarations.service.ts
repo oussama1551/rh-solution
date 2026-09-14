@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { ApprovalStatus, ExceptionalLeaveReason, LeaveType, NotificationType, Prisma } from "@prisma/client";
+import { ApprovalStatus, ExceptionalLeaveReason, LeaveType, NotificationType, Prisma, SickLeaveType } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { employeeScopeWhere } from "../common/employee-scope";
 import { RequestUser } from "../common/request-user.type";
@@ -174,6 +174,7 @@ export class ManualDeclarationsService {
         employeeId: dto.employeeId,
         dateStart: parseDate(dto.dateStart),
         dateEnd: parseDate(dto.dateEnd),
+        sickLeaveType: dto.sickLeaveType || SickLeaveType.MALADIE,
         note: dto.note?.trim() || null,
         declaredById: actor.id,
         status: approval.status,
@@ -347,7 +348,7 @@ export class ManualDeclarationsService {
     const row = await this.prisma.sickLeaveDeclaration.update({
       where: { id },
       data: {
-        dateStart: parseDate(dto.dateStart), dateEnd: parseDate(dto.dateEnd), note: dto.note?.trim() || null,
+        dateStart: parseDate(dto.dateStart), dateEnd: parseDate(dto.dateEnd), sickLeaveType: dto.sickLeaveType || before.sickLeaveType, note: dto.note?.trim() || null,
         status: approval.status, approvedById: approval.status === ApprovalStatus.APPROVED ? actor.id : null,
         approvedAt: approval.status === ApprovalStatus.APPROVED ? new Date() : null
       },

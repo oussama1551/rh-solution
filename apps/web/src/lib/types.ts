@@ -1000,8 +1000,11 @@ export type SummaryDailyRecordRow = {
   overtimeHoursRate100: number;
   shiftType: ShiftType | null;
   leaveType: LeaveType | null;
+  sickLeaveType: "MALADIE" | "ACCIDENT_TRAVAIL" | "DECES" | null;
   exceptionalReason: ExceptionalLeaveReason | null;
   generatedAt: string;
+  displayCode?: string;
+  absenceDetail?: { kind: "SICK" | "LEAVE"; label: string; dateStart: string; dateEnd: string; note: string | null; detail: string | null };
 };
 
 export type OvertimeDeclaration = {
@@ -1029,6 +1032,7 @@ export type SickLeaveDeclaration = {
   id: string;
   dateStart: string;
   dateEnd: string;
+  sickLeaveType: "MALADIE" | "ACCIDENT_TRAVAIL" | "DECES";
   note?: string | null;
   status: ApprovalStatus;
   createdAt: string;

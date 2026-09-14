@@ -1,15 +1,25 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from "@nestjs/common";
 import { ChatConversationType, NotificationType, Prisma } from "@prisma/client";
 import { RequestUser } from "../common/request-user.type";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
-export class ChatService {
+export class ChatService implements OnModuleInit {
+  private readonly logger = new Logger(ChatService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService
   ) {}
+
+  async onModuleInit() {
+    try {
+      const added = await this.addAdminsToExistingRhResponsableGroups();
+      if (added > 0) this.logger.log(`${added} participation(s) Admin ajoutée(s) aux groupes RH existants, historique conservé.`);
+    } catch (error) {
+      this.logger.error("Impossible de synchroniser les Admin dans les groupes RH.", error instanceof Error ? error.stack : String(error));
+    }
+  }
 
   listUsers(actor: RequestUser) {
     return this.prisma.user.findMany({
@@ -91,8 +101,12 @@ export class ChatService {
   }
 
   async createGroup(dto: { name?: string; userIds?: string[] }, actor: RequestUser) {
-    const userIds = [...new Set([actor.id, ...(dto.userIds || [])])];
+    let userIds = [...new Set([actor.id, ...(dto.userIds || [])])];
     if (userIds.length < 2) throw new BadRequestException("Sélectionnez au moins un autre utilisateur.");
+    if (await this.isRhResponsableParticipantSet(userIds)) {
+      const adminIds = await this.activeUserIdsByRole("ADMIN");
+      userIds = [...new Set([...userIds, ...adminIds])];
+    }
     const row = await this.prisma.chatConversation.create({
       data: {
         type: ChatConversationType.GROUP,
@@ -141,9 +155,44 @@ export class ChatService {
     return row;
   }
 
+  private async addAdminsToExistingRhResponsableGroups() {
+    const adminIds = await this.activeUserIdsByRole("ADMIN");
+    if (!adminIds.length) return 0;
+    const groups = await this.prisma.chatConversation.findMany({
+      where: { type: ChatConversationType.GROUP },
+      select: {
+        id: true,
+        participants: { select: { userId: true, user: { select: { roles: { select: { role: { select: { code: true } } } } } } } }
+      }
+    });
+    const targetIds = groups.filter(group => isRhResponsableRoles(group.participants.flatMap(participant => participant.user.roles.map(item => item.role.code)))).map(group => group.id);
+    if (!targetIds.length) return 0;
+    const existing = await this.prisma.chatParticipant.findMany({ where: { conversationId: { in: targetIds }, userId: { in: adminIds } }, select: { conversationId: true, userId: true } });
+    const keys = new Set(existing.map(item => `${item.conversationId}:${item.userId}`));
+    const data = targetIds.flatMap(conversationId => adminIds.filter(userId => !keys.has(`${conversationId}:${userId}`)).map(userId => ({ conversationId, userId })));
+    if (data.length) await this.prisma.chatParticipant.createMany({ data, skipDuplicates: true });
+    return data.length;
+  }
+
+  private async isRhResponsableParticipantSet(userIds: string[]) {
+    const users = await this.prisma.user.findMany({ where: { id: { in: userIds }, isActive: true }, select: { roles: { select: { role: { select: { code: true } } } } } });
+    return isRhResponsableRoles(users.flatMap(user => user.roles.map(item => item.role.code)));
+  }
+
+  private async activeUserIdsByRole(code: string) {
+    const users = await this.prisma.user.findMany({ where: { isActive: true, roles: { some: { role: { code } } } }, select: { id: true } });
+    return users.map(user => user.id);
+  }
+
   private displayName(row: Prisma.ChatConversationGetPayload<{ include: { participants: { include: { user: { select: { id: true; username: true; fullName: true } } } } } }>, actorId: string) {
     if (row.type === ChatConversationType.GROUP) return row.name || "Groupe";
     const other = row.participants.find(participant => participant.userId !== actorId)?.user;
     return other?.fullName || other?.username || "Conversation";
   }
+}
+
+function isRhResponsableRoles(roleCodes: string[]) {
+  const roles = new Set(roleCodes);
+  const hasResponsable = ["RESPONSABLE_DEPARTEMENT", "RESPONSABLE_PLANNING_GROUPES", "SUPERVISOR"].some(role => roles.has(role));
+  return roles.has("DRH") && roles.has("GRH") && hasResponsable;
 }
